@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SciPair - Author Comparison Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.24.0/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            height: 100vh;
+            margin: 0;
+            padding-top: 20px;
+        }
+        .title {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .description {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .autocomplete {
+            position: relative;
+        }
+        .autocomplete-items {
+            border: 1px solid #d4d4d4;
+            max-height: 200px;
+            overflow-y: auto;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background-color: white;
+        }
+        .autocomplete-item {
+            padding: 10px;
+            cursor: pointer;
+        }
+        .autocomplete-item:hover {
+            background-color: #e9e9e9;
+        }
+        .author-name {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        .author-hint {
+            font-size: 0.9em;
+            color: #555;
+        }
+        .author-card {
+            margin-top: 10px;
+            padding: 15px;
+            border: 1px solid #d4d4d4;
+            background-color: #f9f9f9;
+            height: 100px;
+        }
+        .author-card .author-id {
+            font-size: 0.8em;
+            color: gray;
+            float: right;
+        }
+        .author-works-container {
+            margin-top: 10px;
+        }
+        .author-works {
+            border: 1px dashed #e0e0e0;
+            padding: 5px;
+            background-color: #fafafa;
+            margin-bottom: 5px;
+            font-size: 0.85em;
+            color: #333;
+            cursor: pointer;
+            position: relative;
+            min-height:60px;
+        }
+        .author1-works {
+            text-align: right;
+        }
+        .author2-works {
+            text-align: left;
+        }
+        .author1-works .author-works {
+            padding-right:20px;
+        }
+        .author2-works .author-works {
+            padding-left:20px;
+        }
+        .highlight-coauthored {
+            background-color: #ffcccb;
+        }
+        .highlight-citing {
+            background-color: #c8e6c9;
+        }
+        .highlight-cited {
+            background-color: #ffe0b2;
+        }
+        .highlight-gray {
+            background-color: #e0e0e0;
+        }
+        /* Specific combinations of highlight classes */
+        .highlight-citing.highlight-cited {
+            background: linear-gradient(to right, #c8e6c9 50%, #ffe0b2 50%);
+        }
+        .highlight-citing.highlight-coauthored {
+            background: linear-gradient(to right, #c8e6c9 50%, #ffcccb 50%);
+        }
+        .highlight-cited.highlight-coauthored {
+            background: linear-gradient(to right, #ffe0b2 50%, #ffcccb 50%);
+        }
+        .highlight-citing.highlight-cited.highlight-coauthored {
+            background: linear-gradient(to right, #c8e6c9 33.33%, #ffe0b2 33.33%, #ffe0b2 66.66%, #ffcccb 66.66%);
+        }
+        /* Visual cues for each highlight type */
+        .author1-works .author-works::before{
+            right: 3px;
+        }
+        .author2-works .author-works::before{
+            left: 3px;
+        }
+
+        .author-works.highlight-citing::before {
+            content: '\2191';
+            position: absolute;
+            font-size: 16px;
+            color: #666666;
+            top: 4px;
+            white-space: pre;
+            line-height: 1;
+            text-align: center;
+        }
+        .author-works.highlight-cited::before {
+            content: '\2193';
+            position: absolute;
+            font-size: 16px;
+            color: #666666;
+            top: 4px;
+            white-space: pre;
+            line-height: 1;
+            text-align: center;
+        }
+        .author-works.highlight-coauthored::before {
+            content: '\25CB';
+            position: absolute;
+            font-size: 16px;
+            color: #666666;
+            top: 4px;
+            white-space: pre;
+            line-height: 1;
+            text-align: center;
+        }
+        
+        /* combinations */
+        .author-works.highlight-citing.highlight-cited::before {
+            content: '\2195';
+        }
+        .author-works.highlight-citing.highlight-coauthored::before {
+            content: '\2191\A \25CB';
+        }
+        .author-works.highlight-cited.highlight-coauthored::before {
+            content: '\2193\A \25CB';
+        }
+        .author-works.highlight-citing.highlight-cited.highlight-coauthored::before {
+            content: '\2195\A \25CB';
+        }
+
+        
+        .hide-toggle {
+            cursor: pointer;
+            color: #4a4a4a;
+            font-size: 0.9em;
+            padding: 5px 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .hide-toggle:hover {
+            background-color: #f7f7f7;
+        }
+        .author-stats-table {
+            width: 100%;
+            margin-top: 10px;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        .author-stats-table td {
+            padding: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .spinner {
+            display: none;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">SciPair</div>
+    <div class="description">A tool to explore relationships between authors using data from OpenAlex. Compare authors, visualize coauthorships and citations.</div>
+    <div class="columns is-multiline" style="width: 80%;">
+        <div class="column is-half">
+            <div class="field">
+                <label class="label">Author A</label>
+                <div class="control autocomplete">
+                    <input id="author1" type="text" class="input" placeholder="Search author A..." oninput="handleInputChange('author1')">
+                    <div id="author1-list" class="autocomplete-items"></div>
+                    <div id="author1-card" class="author-card" style="display: none;"></div>
+                    <table id="author1-stats" class="author-stats-table" style="display: none;"></table>
+                    <div class="hide-toggle" onclick="toggleHiddenPapers('author1')">Show non-highlighted papers ▲</div>
+                    <div id="author1-works-container" class="author-works-container author1-works"></div>
+                </div>
+            </div>
+        </div>
+        <div class="column is-half">
+            <div class="field">
+                <label class="label">Author B</label>
+                <div class="control autocomplete">
+                    <input id="author2" type="text" class="input" placeholder="Search author B..." oninput="handleInputChange('author2')">
+                    <div id="author2-list" class="autocomplete-items"></div>
+                    <div id="author2-card" class="author-card" style="display: none;"></div>
+                    <table id="author2-stats" class="author-stats-table" style="display: none;"></table>
+                    <div class="hide-toggle" onclick="toggleHiddenPapers('author2')">Show non-highlighted papers ▲</div>
+                    <div id="author2-works-container" class="author-works-container author2-works"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="loadingOverlay">
+        <div class="spinner" id="loadingSpinner"></div>
+    </div>
+    <script>
+        let debounceTimer;
+        let author1WorksMap = new Map();
+        let author2WorksMap = new Map();
+        let author1ElementsMap = new Map();
+        let author2ElementsMap = new Map();
+        let hiddenPapers = {
+            author1: true,
+            author2: true
+        };
+
+        // Default authors to start with
+        const defaultAuthor1 = 'Filippo Menczer';
+        const defaultAuthor2 = 'Santo Fortunato';
+
+        window.onload = () => {
+            const hash = window.location.hash.substring(1);
+            if (hash) {
+                const [author1Id, author2Id] = hash.split(';');
+                document.getElementById('author1').value = author1Id;
+                document.getElementById('author2').value = author2Id;
+                selectDefaultAuthor('author1',author1Id);
+                selectDefaultAuthor('author2',author2Id);
+            } else {
+                document.getElementById('author1').value = defaultAuthor1;
+                document.getElementById('author2').value = defaultAuthor2;
+                selectDefaultAuthor('author1');
+                selectDefaultAuthor('author2');
+            }
+        };
+
+        function handleInputChange(inputId) {
+            clearAuthorData(inputId);
+            throttledFetchAuthors(inputId);
+        }
+
+        function throttledFetchAuthors(inputId) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => fetchAuthors(inputId), 300);
+        }
+
+        async function fetchAuthors(inputId) {
+            const query = document.getElementById(inputId).value;
+            if (query.length < 2) {
+                document.getElementById(`${inputId}-list`).innerHTML = '';
+                return;
+            }
+
+            try {
+                const response = await axios.get(`https://api.openalex.org/autocomplete/authors?q=${query}`);
+                const authors = response.data.results;
+                displayAutocomplete(authors, inputId);
+            } catch (error) {
+                console.error('Error fetching authors:', error);
+            }
+        }
+
+        function displayAutocomplete(authors, inputId) {
+            const list = document.getElementById(`${inputId}-list`);
+            list.innerHTML = '';
+            authors.forEach(author => {
+                const item = document.createElement('div');
+                item.classList.add('autocomplete-item');
+
+                const nameElement = document.createElement('div');
+                nameElement.classList.add('author-name');
+                nameElement.textContent = author.display_name;
+
+                const hintElement = document.createElement('div');
+                hintElement.classList.add('author-hint');
+                hintElement.textContent = author.hint ? author.hint : 'Unknown Institution';
+
+                item.appendChild(nameElement);
+                item.appendChild(hintElement);
+
+                item.onclick = () => {
+                    document.getElementById(inputId).value = author.display_name;
+                    list.innerHTML = '';
+                    displayAuthorCard(author, inputId);
+                    fetchAuthorWorks(author.short_id.split('/')[1], inputId);
+                    updateHash();
+                };
+                list.appendChild(item);
+            });
+        }
+
+        function displayAuthorCard(author, inputId) {
+            const card = document.getElementById(`${inputId}-card`);
+            card.innerHTML = '';
+
+            const nameElement = document.createElement('div');
+            nameElement.classList.add('author-name');
+            nameElement.textContent = author.display_name;
+
+            const hintElement = document.createElement('div');
+            hintElement.classList.add('author-hint');
+            hintElement.textContent = author.hint ? author.hint : 'Unknown Institution';
+
+            const idElement = document.createElement('div');
+            idElement.classList.add('author-id');
+            idElement.textContent = author.short_id.split('/')[1];
+
+            card.appendChild(nameElement);
+            card.appendChild(hintElement);
+            card.appendChild(idElement);
+            card.style.display = 'block';
+        }
+
+        async function selectDefaultAuthor(inputId, authorName) {
+            try {
+                showLoading();
+                disableInputs(true);
+                // if authorName is not provided, use the default authors
+                if (!authorName){
+                    authorName = inputId === 'author1' ? defaultAuthor1 : defaultAuthor2;
+                }
+                const response = await axios.get(`https://api.openalex.org/autocomplete/authors?q=${authorName}`);
+                const authors = response.data.results;
+                if (authors.length > 0) {
+                    const author = authors[0];
+                    document.getElementById(inputId).value = author.display_name;
+                    displayAuthorCard(author, inputId);
+                    await fetchAuthorWorks(author.short_id.split('/')[1], inputId);
+                    updateHash();
+                }
+            } catch (error) {
+                console.error('Error selecting default author:', error);
+            } finally {
+                hideLoading();
+                disableInputs(false);
+            }
+        }
+
+        async function fetchAuthorWorks(authorId, inputId) {
+            const worksContainerId = `${inputId}-works-container`;
+            const worksContainer = document.getElementById(worksContainerId);
+            worksContainer.innerHTML = '';
+
+            let cursor = '*';
+            let hasMore = true;
+            const worksMap = inputId === 'author1' ? author1WorksMap : author2WorksMap;
+            const elementsMap = inputId === 'author1' ? author1ElementsMap : author2ElementsMap;
+            worksMap.clear();
+            elementsMap.clear();
+
+            try {
+                showLoading();
+                disableInputs(true);
+                while (hasMore) {
+                    const response = await axios.get(`https://api.openalex.org/works?per_page=200&filter=authorships.author.id:${authorId}&cursor=${cursor}`);
+                    const works = response.data.results;
+                    cursor = response.data.meta.next_cursor;
+                    hasMore = !!cursor;
+
+                    works.sort((a, b) => b.publication_year - a.publication_year);
+
+                    works.forEach(work => {
+                        const workData = {
+                            title: work.title,
+                            publication_year: work.publication_year,
+                            referenced_works: new Set(work.referenced_works || []),
+                            venue: work.primary_location?.source?.display_name || 'Unknown Venue',
+                            url: work.primary_location?.landing_page_url || null
+                        };
+                        worksMap.set(work.id, workData);
+
+                        const workItem = document.createElement('div');
+                        workItem.classList.add('author-works');
+                        workItem.textContent = `${workData.title} (${workData.publication_year}) - ${workData.venue}`;
+                        if (workData.url) {
+                            workItem.onclick = () => {
+                                window.open(workData.url, '_blank');
+                            }
+                        }
+                        elementsMap.set(work.id, workItem);
+                        worksContainer.appendChild(workItem);
+                    });
+
+                    // Adding a delay between requests to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                highlightCitations();
+            } catch (error) {
+                console.error('Error fetching works:', error);
+            } finally {
+                hideLoading();
+                disableInputs(false);
+            }
+        }
+
+        function clearAuthorData(inputId) {
+            document.getElementById(`${inputId}-card`).style.display = 'none';
+            document.getElementById(`${inputId}-card`).innerHTML = '';
+            document.getElementById(`${inputId}-works-container`).innerHTML = '';
+            document.getElementById(`${inputId}-stats`).style.display = 'none';
+            document.getElementById(`${inputId}-stats`).innerHTML = '';
+            if (inputId === 'author1') {
+                author1WorksMap.clear();
+                author1ElementsMap.clear();
+            } else {
+                author2WorksMap.clear();
+                author2ElementsMap.clear();
+            }
+
+            author1WorksMap.forEach((work, id) => {
+                author1ElementsMap.get(id).classList.remove('highlight-citing', 'highlight-cited', 'highlight-coauthored');
+            });
+            author2WorksMap.forEach((work, id) => {
+                author2ElementsMap.get(id).classList.remove('highlight-citing', 'highlight-cited', 'highlight-coauthored');
+            });
+            updateVisibility();
+
+        }
+
+        function highlightCitations() {
+            let author1CitingCount = 0;
+            let author1CitedCount = 0;
+            let author1CoauthoredCount = 0;
+            let author2CitingCount = 0;
+            let author2CitedCount = 0;
+            let author2CoauthoredCount = 0;
+            // clear existing highlights for both authors
+            author1WorksMap.forEach((work, id) => {
+                author1ElementsMap.get(id).classList.remove('highlight-citing', 'highlight-cited', 'highlight-coauthored');
+            });
+            author2WorksMap.forEach((work, id) => {
+                author2ElementsMap.get(id).classList.remove('highlight-citing', 'highlight-cited', 'highlight-coauthored');
+            });
+
+            // Highlighting and counting for author 1
+            // terrible decision using 2 nested loops, but it's the only way to compare all works from both authors
+            author1WorksMap.forEach((work1, id1) => {
+                author2WorksMap.forEach((work2, id2) => {
+                    if (work1.referenced_works.has(id2)) {
+                        author1CitingCount++;
+                        author2CitedCount++;
+                        author1ElementsMap.get(id1).classList.add('highlight-citing');
+                        author2ElementsMap.get(id2).classList.add('highlight-cited');
+                    }
+                    if (work2.referenced_works.has(id1)) {
+                        author1CitedCount++;
+                        author2CitingCount++;
+                        author1ElementsMap.get(id1).classList.add('highlight-cited');
+                        author2ElementsMap.get(id2).classList.add('highlight-citing');
+                    }
+                    if (id1 === id2) {
+                        author1CoauthoredCount++;
+                        author2CoauthoredCount++;
+                        author1ElementsMap.get(id1).classList.add('highlight-coauthored');
+                        author2ElementsMap.get(id2).classList.add('highlight-coauthored');
+                    }
+                });
+            });
+            updateStats('author1', author1CitingCount, author1CitedCount, author1CoauthoredCount);
+            updateStats('author2', author2CitingCount, author2CitedCount, author2CoauthoredCount);
+            updateVisibility();
+        }
+
+        function updateStats(inputId, citingCount, citedCount, coauthoredCount) {
+            const worksMap = inputId === 'author1' ? author1WorksMap : author2WorksMap;
+
+            opositeAuthorLetter = inputId === 'author1' ? 'B' : 'A';
+            const total = worksMap.size;
+
+            const statsTable = document.getElementById(`${inputId}-stats`);
+            statsTable.style.display = 'table';
+            statsTable.innerHTML = `
+                <tr>
+                    <td style="background-color: #c8e6c9; color: black;">↑ Citing ${opositeAuthorLetter}: ${citingCount}</td>
+                    <td style="background-color: #ffe0b2; color: black;">↓ Cited by ${opositeAuthorLetter}: ${citedCount}</td>
+                </tr>
+                <tr>
+                    <td style="background-color: #ffcccb; color: black;">○ Coauthored: ${coauthoredCount}</td>
+                    <td style="background-color: #e0e0e0; color: black;">Total: ${total}</td>
+                </tr>
+            `;
+        }
+
+        function toggleHiddenPapers(inputId) {
+            hiddenPapers[inputId] = !hiddenPapers[inputId];
+            updateVisibility();
+        }
+
+        function updateVisibility() {
+            ['author1', 'author2'].forEach(inputId => {
+                const worksContainer = document.getElementById(`${inputId}-works-container`).children;
+                
+                for (let work of worksContainer) {
+                    let shouldShow = work.classList.contains('highlight-citing') ||
+                        work.classList.contains('highlight-cited') ||
+                        work.classList.contains('highlight-coauthored') ||
+                        work.classList.contains('highlight-gray');
+                    
+                        work.style.display = (!hiddenPapers[inputId] || shouldShow) ? 'block' : 'none';
+                }
+                document.querySelector(`[onclick="toggleHiddenPapers('${inputId}')"]`).textContent = hiddenPapers[inputId] ? 'Show all papers ▲' : 'Hide other papers ▼';
+            });
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'block';
+            document.getElementById('loadingSpinner').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            document.getElementById('loadingSpinner').style.display = 'none';
+        }
+
+        function disableInputs(disable) {
+            document.querySelectorAll('input, .hide-toggle').forEach(element => {
+                element.disabled = disable;
+                if (disable) {
+                    element.classList.add('disabled');
+                } else {
+                    element.classList.remove('disabled');
+                }
+            });
+        }
+
+        function updateHash() {
+            const author1Id = document.getElementById('author1-card').querySelector('.author-id')?.textContent || '';
+            const author2Id = document.getElementById('author2-card').querySelector('.author-id')?.textContent || '';
+            window.location.hash = `${author1Id};${author2Id}`;
+        }
+    </script>
+</body>
+</html>
