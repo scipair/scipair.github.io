@@ -72,7 +72,7 @@
             margin-top: 10px;
         }
         .author-works {
-            border: 1px dashed #e0e0e0;
+            border: 1px dashed #d9d9d9;
             padding: 5px;
             background-color: #fafafa;
             margin-bottom: 5px;
@@ -95,29 +95,29 @@
             padding-left:20px;
         }
         .highlight-coauthored {
-            background-color: #ffcccb;
+            background-color: #f8d7d3;
         }
         .highlight-citing {
-            background-color: #c8e6c9;
+            background-color: #d0ebf2;
         }
         .highlight-cited {
-            background-color: #ffe0b2;
+            background-color: #fde8c8;
         }
         .highlight-gray {
-            background-color: #e0e0e0;
+            background-color: #d9d9d9;
         }
         /* Specific combinations of highlight classes */
         .highlight-citing.highlight-cited {
-            background: linear-gradient(to right, #c8e6c9 50%, #ffe0b2 50%);
+            background: linear-gradient(to right, #d0ebf2 50%, #fde8c8 50%);
         }
         .highlight-citing.highlight-coauthored {
-            background: linear-gradient(to right, #c8e6c9 50%, #ffcccb 50%);
+            background: linear-gradient(to right, #d0ebf2 50%, #f8d7d3 50%);
         }
         .highlight-cited.highlight-coauthored {
-            background: linear-gradient(to right, #ffe0b2 50%, #ffcccb 50%);
+            background: linear-gradient(to right, #fde8c8 50%, #f8d7d3 50%);
         }
         .highlight-citing.highlight-cited.highlight-coauthored {
-            background: linear-gradient(to right, #c8e6c9 33.33%, #ffe0b2 33.33%, #ffe0b2 66.66%, #ffcccb 66.66%);
+            background: linear-gradient(to right, #d0ebf2 33.33%, #fde8c8 33.33%, #fde8c8 66.66%, #f8d7d3 66.66%);
         }
         /* Visual cues for each highlight type */
         .author1-works .author-works::before{
@@ -230,7 +230,7 @@
 <body>
     <div class="title">SciPair</div>
     <div class="description">A tool to explore relationships between authors using data from OpenAlex. Compare authors, visualize coauthorships and citations. Created by 
-        <a href="://filipinascimento.github.io" target="_blank">Filipi N. Silva</a>, based on a concept by Danishjeet Singh.</div>
+        <a href="://singhdan.me" target="_blank">Danishjeet Singh</a> and <a href="://filipinascimento.github.io" target="_blank">Filipi N. Silva</a>.</div>
     <div class="columns is-multiline" style="width: 80%;">
         <div class="column is-half">
             <div class="field">
@@ -531,12 +531,12 @@
             statsTable.style.display = 'table';
             statsTable.innerHTML = `
                 <tr>
-                    <td style="background-color: #c8e6c9; color: black;">↑ Citing ${opositeAuthorLetter}: ${citingCount}</td>
-                    <td style="background-color: #ffe0b2; color: black;">↓ Cited by ${opositeAuthorLetter}: ${citedCount}</td>
+                    <td style="background-color: #d0ebf2; color: black;">↑ Citing ${opositeAuthorLetter}: ${citingCount}</td>
+                    <td style="background-color: #fde8c8; color: black;">↓ Cited by ${opositeAuthorLetter}: ${citedCount}</td>
                 </tr>
                 <tr>
-                    <td style="background-color: #ffcccb; color: black;">○ Coauthored: ${coauthoredCount}</td>
-                    <td style="background-color: #e0e0e0; color: black;">Total: ${total}</td>
+                    <td style="background-color: #f8d7d3; color: black;">○ Coauthored: ${coauthoredCount}</td>
+                    <td style="background-color: #d9d9d9; color: black;">Total: ${total}</td>
                 </tr>
             `;
         }
