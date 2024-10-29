@@ -2,6 +2,10 @@
 
 SciPair is a tool for exploring relationships between authors using data from OpenAlex. It allows users to compare authors, visualize coauthorships, and citations.
 
+## Link to Try It
+
+You can try the tool online at [https://scipair.github.io/scipair/](https://scipair.github.io/scipair/).
+
 ## Creators
 
 - [Danishjeet Singh](https://singhdan.me)
