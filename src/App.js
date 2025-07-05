@@ -43,7 +43,6 @@ function App() {
   const [activeTab, setActiveTab] = useState('comparison');
   const [author1Collaborators, setAuthor1Collaborators] = useState(new Map());
   const [author2Collaborators, setAuthor2Collaborators] = useState(new Map());
-  const [networkData, setNetworkData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [inputsDisabled, setInputsDisabled] = useState(false);
   const [userTyping, setUserTyping] = useState({ author1: false, author2: false });
@@ -54,6 +53,7 @@ function App() {
   const author1InputRef = useRef(null);
   const author2InputRef = useRef(null);
   const networkContainerRef = useRef(null);
+  const networkInstanceRef = useRef(null);
 
   // Default authors
   const defaultAuthor1 = 'Filippo Menczer';
@@ -1048,12 +1048,6 @@ function App() {
       
       console.log('Initializing network with', nodes.length, 'nodes and', edges.length, 'edges');
       
-      // Clear any existing network
-      if (networkData) {
-        networkData.destroy();
-        setNetworkData(null);
-      }
-      
       const data = {
         nodes: nodes,
         edges: edges
@@ -1106,10 +1100,16 @@ function App() {
       };
 
       try {
+        // Clear any existing network
+        if (networkInstanceRef.current) {
+          networkInstanceRef.current.destroy();
+          networkInstanceRef.current = null;
+        }
+        
         const network = new Network(networkContainerRef.current, data, options);
         
-        // Store network instance to allow cleanup
-        setNetworkData(network);
+        // Store network instance in ref
+        networkInstanceRef.current = network;
         
         // Set up event listeners
         network.on('stabilizationProgress', function(params) {
@@ -1123,8 +1123,9 @@ function App() {
         console.log('Network initialized successfully');
         
         return () => {
-          if (network) {
-            network.destroy();
+          if (networkInstanceRef.current) {
+            networkInstanceRef.current.destroy();
+            networkInstanceRef.current = null;
           }
         };
       } catch (error) {
@@ -1136,11 +1137,12 @@ function App() {
   // Cleanup network on unmount
   useEffect(() => {
     return () => {
-      if (networkData) {
-        networkData.destroy();
+      if (networkInstanceRef.current) {
+        networkInstanceRef.current.destroy();
+        networkInstanceRef.current = null;
       }
     };
-  }, [networkData]);
+  }, []);
 
   return (
     <div className="App">
