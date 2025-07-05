@@ -218,6 +218,57 @@
   background-color: #f7f7f7;
 }
 
+.filter-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.filter-button {
+  padding: 8px 10px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: bold;
+  color: black;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.filter-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.filter-button.active {
+  border-color: #333;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.filter-button:active {
+  transform: translateY(0);
+}
+
+/* Individual filter button colors */
+.filter-citing {
+  background-color: #d0ebf2;
+}
+
+.filter-cited {
+  background-color: #fde8c8;
+}
+
+.filter-coauthored {
+  background-color: #f8d7d3;
+}
+
+.filter-all {
+  background-color: #d9d9d9;
+}
+
 .author-stats-table {
   width: 100%;
   margin-top: 10px;

@@ -13,7 +13,7 @@ function App() {
   const [author2Works, setAuthor2Works] = useState(new Map());
   const [author1Stats, setAuthor1Stats] = useState({ citing: 0, cited: 0, coauthored: 0, total: 0 });
   const [author2Stats, setAuthor2Stats] = useState({ citing: 0, cited: 0, coauthored: 0, total: 0 });
-  const [hiddenPapers, setHiddenPapers] = useState({ author1: true, author2: true });
+  const [activeFilter, setActiveFilter] = useState({ author1: 'all', author2: 'all' });
   const [loading, setLoading] = useState(false);
   const [inputsDisabled, setInputsDisabled] = useState(false);
   const [userTyping, setUserTyping] = useState({ author1: false, author2: false });
@@ -441,14 +441,20 @@ function App() {
       setAuthor2Autocomplete([]);
     }
     
+    // Reset filter to 'all' when clearing data
+    setActiveFilter(prev => ({
+      ...prev,
+      [inputId]: 'all'
+    }));
+    
     // Clear highlighting state to prevent glitching
     setIsHighlighting(false);
   };
 
-  const toggleHiddenPapers = (inputId) => {
-    setHiddenPapers(prev => ({
+  const setFilter = (inputId, filterType) => {
+    setActiveFilter(prev => ({
       ...prev,
-      [inputId]: !prev[inputId]
+      [inputId]: filterType
     }));
   };
 
@@ -461,8 +467,24 @@ function App() {
   };
 
   const shouldShowWork = (work, inputId) => {
-    const shouldShow = work.citing || work.cited || work.coauthored;
-    return !hiddenPapers[inputId] || shouldShow;
+    const filter = activeFilter[inputId];
+    
+    // If filter is 'all', show all papers
+    if (filter === 'all') {
+      return true;
+    }
+    
+    // If filter is 'highlighted', show only papers with relationships
+    if (filter === 'highlighted') {
+      return work.citing || work.cited || work.coauthored;
+    }
+    
+    // Show papers based on specific relationship filter
+    if (filter === 'citing') return work.citing;
+    if (filter === 'cited') return work.cited;
+    if (filter === 'coauthored') return work.coauthored;
+    
+    return true;
   };
 
   const renderAuthorWorks = (works, inputId) => {
@@ -478,6 +500,40 @@ function App() {
           {work.title} ({work.publication_year}) - {work.venue}
         </div>
       ));
+  };
+
+  const renderFilterButtons = (stats, inputId) => {
+    const otherAuthor = inputId === 'author1' ? 'B' : 'A';
+    const currentFilter = activeFilter[inputId];
+    
+    return (
+      <div className="filter-buttons">
+        <button
+          className={`filter-button filter-citing ${currentFilter === 'citing' ? 'active' : ''}`}
+          onClick={() => setFilter(inputId, 'citing')}
+        >
+          ↑ Citing {otherAuthor}: {stats.citing}
+        </button>
+        <button
+          className={`filter-button filter-cited ${currentFilter === 'cited' ? 'active' : ''}`}
+          onClick={() => setFilter(inputId, 'cited')}
+        >
+          ↓ Cited by {otherAuthor}: {stats.cited}
+        </button>
+        <button
+          className={`filter-button filter-coauthored ${currentFilter === 'coauthored' ? 'active' : ''}`}
+          onClick={() => setFilter(inputId, 'coauthored')}
+        >
+          ○ Coauthored: {stats.coauthored}
+        </button>
+        <button
+          className={`filter-button filter-all ${currentFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setFilter(inputId, 'all')}
+        >
+          All Papers: {stats.total}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -534,23 +590,7 @@ function App() {
                   <div className="author-id">{author1Data.short_id.split('/')[1]}</div>
                 </div>
               )}
-              {author1Stats.total > 0 && (
-                <table className="author-stats-table">
-                  <tbody>
-                    <tr>
-                      <td style={{ backgroundColor: '#d0ebf2', color: 'black' }}>↑ Citing B: {author1Stats.citing}</td>
-                      <td style={{ backgroundColor: '#fde8c8', color: 'black' }}>↓ Cited by B: {author1Stats.cited}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ backgroundColor: '#f8d7d3', color: 'black' }}>○ Coauthored: {author1Stats.coauthored}</td>
-                      <td style={{ backgroundColor: '#d9d9d9', color: 'black' }}>Total: {author1Stats.total}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-              <div className="hide-toggle" onClick={() => toggleHiddenPapers('author1')}>
-                {hiddenPapers.author1 ? 'Show all papers ▲' : 'Hide other papers ▼'}
-              </div>
+              {author1Stats.total > 0 && renderFilterButtons(author1Stats, 'author1')}
               <div className="author-works-container author1-works">
                 {renderAuthorWorks(author1Works, 'author1')}
               </div>
@@ -601,23 +641,7 @@ function App() {
                   <div className="author-id">{author2Data.short_id.split('/')[1]}</div>
                 </div>
               )}
-              {author2Stats.total > 0 && (
-                <table className="author-stats-table">
-                  <tbody>
-                    <tr>
-                      <td style={{ backgroundColor: '#d0ebf2', color: 'black' }}>↑ Citing A: {author2Stats.citing}</td>
-                      <td style={{ backgroundColor: '#fde8c8', color: 'black' }}>↓ Cited by A: {author2Stats.cited}</td>
-                    </tr>
-                    <tr>
-                      <td style={{ backgroundColor: '#f8d7d3', color: 'black' }}>○ Coauthored: {author2Stats.coauthored}</td>
-                      <td style={{ backgroundColor: '#d9d9d9', color: 'black' }}>Total: {author2Stats.total}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-              <div className="hide-toggle" onClick={() => toggleHiddenPapers('author2')}>
-                {hiddenPapers.author2 ? 'Show all papers ▲' : 'Hide other papers ▼'}
-              </div>
+              {author2Stats.total > 0 && renderFilterButtons(author2Stats, 'author2')}
               <div className="author-works-container author2-works">
                 {renderAuthorWorks(author2Works, 'author2')}
               </div>
