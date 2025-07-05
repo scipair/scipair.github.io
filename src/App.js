@@ -1,6 +1,31 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  TimeScale,
+} from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  TimeScale
+);
 
 function App() {
   const [author1, setAuthor1] = useState('');
@@ -14,6 +39,7 @@ function App() {
   const [author1Stats, setAuthor1Stats] = useState({ citing: 0, cited: 0, coauthored: 0, total: 0 });
   const [author2Stats, setAuthor2Stats] = useState({ citing: 0, cited: 0, coauthored: 0, total: 0 });
   const [activeFilter, setActiveFilter] = useState({ author1: 'all', author2: 'all' });
+  const [activeTab, setActiveTab] = useState('comparison');
   const [loading, setLoading] = useState(false);
   const [inputsDisabled, setInputsDisabled] = useState(false);
   const [userTyping, setUserTyping] = useState({ author1: false, author2: false });
@@ -39,6 +65,9 @@ function App() {
     let cursor = '*';
     let hasMore = true;
     const worksMap = new Map();
+    const seenIds = new Set();
+    let totalFetched = 0;
+    let duplicatesFound = 0;
 
     try {
       // Set loading state if not already set
@@ -53,30 +82,54 @@ function App() {
         cursor = response.data.meta.next_cursor;
         hasMore = !!cursor;
 
-        works.sort((a, b) => b.publication_year - a.publication_year);
-
         works.forEach(work => {
+          totalFetched++;
+          
+          // Skip if we've already seen this work ID
+          if (seenIds.has(work.id)) {
+            duplicatesFound++;
+            return;
+          }
+          
+          // Skip if work has invalid data
+          if (!work.id || !work.title) {
+            return;
+          }
+          
+          seenIds.add(work.id);
+          
           const workData = {
             id: work.id,
-            title: work.title,
+            title: work.title?.trim() || 'Untitled',
             publication_year: work.publication_year,
-            referenced_works: new Set(work.referenced_works || []),
-            venue: work.primary_location?.source?.display_name || 'Unknown Venue',
+            referenced_works: new Set((work.referenced_works || []).filter(ref => ref && ref.trim())),
+            venue: work.primary_location?.source?.display_name?.trim() || 'Unknown Venue',
             url: work.primary_location?.landing_page_url || null,
             citing: false,
             cited: false,
             coauthored: false
           };
+          
           worksMap.set(work.id, workData);
         });
 
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
+      // Log deduplication stats
+      console.log(`Author ${inputId}: Fetched ${totalFetched} works, found ${duplicatesFound} duplicates, keeping ${worksMap.size} unique works`);
+
+      // Sort works by publication year (most recent first)
+      const sortedWorks = new Map([...worksMap.entries()].sort((a, b) => {
+        const yearA = a[1].publication_year || 0;
+        const yearB = b[1].publication_year || 0;
+        return yearB - yearA;
+      }));
+
       if (inputId === 'author1') {
-        setAuthor1Works(worksMap);
+        setAuthor1Works(sortedWorks);
       } else {
-        setAuthor2Works(worksMap);
+        setAuthor2Works(sortedWorks);
       }
 
     } catch (error) {
@@ -170,6 +223,10 @@ function App() {
 
       const newAuthor1Works = new Map();
       const newAuthor2Works = new Map();
+      
+      // Track processed relationships to avoid double counting
+      const processedCitations = new Set();
+      const processedCollaborations = new Set();
 
       // Create new objects for each work to ensure proper React re-rendering
       author1Works.forEach((work, id) => {
@@ -190,29 +247,49 @@ function App() {
         });
       });
 
-      // Apply highlights
+      // Apply highlights with deduplication
       newAuthor1Works.forEach((work1, id1) => {
         newAuthor2Works.forEach((work2, id2) => {
-          if (work1.referenced_works.has(id2)) {
-            author1CitingCount++;
-            author2CitedCount++;
-            work1.citing = true;
-            work2.cited = true;
-          }
-          if (work2.referenced_works.has(id1)) {
-            author1CitedCount++;
-            author2CitingCount++;
-            work1.cited = true;
-            work2.citing = true;
-          }
+          // Check for collaboration (same paper)
           if (id1 === id2) {
-            author1CoauthoredCount++;
-            author2CoauthoredCount++;
-            work1.coauthored = true;
-            work2.coauthored = true;
+            const collabKey = id1;
+            if (!processedCollaborations.has(collabKey)) {
+              processedCollaborations.add(collabKey);
+              author1CoauthoredCount++;
+              author2CoauthoredCount++;
+              work1.coauthored = true;
+              work2.coauthored = true;
+            }
+            return; // Skip citation checks for collaborations
+          }
+          
+          // Check if work1 cites work2
+          if (work1.referenced_works.has(id2)) {
+            const citationKey = `${id1}-cites-${id2}`;
+            if (!processedCitations.has(citationKey)) {
+              processedCitations.add(citationKey);
+              author1CitingCount++;
+              author2CitedCount++;
+              work1.citing = true;
+              work2.cited = true;
+            }
+          }
+          
+          // Check if work2 cites work1
+          if (work2.referenced_works.has(id1)) {
+            const citationKey = `${id2}-cites-${id1}`;
+            if (!processedCitations.has(citationKey)) {
+              processedCitations.add(citationKey);
+              author1CitedCount++;
+              author2CitingCount++;
+              work1.cited = true;
+              work2.citing = true;
+            }
           }
         });
       });
+
+      console.log(`Highlighting complete: Author1 (${author1CitingCount} citing, ${author1CitedCount} cited, ${author1CoauthoredCount} coauthored) Author2 (${author2CitingCount} citing, ${author2CitedCount} cited, ${author2CoauthoredCount} coauthored)`);
 
       setAuthor1Works(newAuthor1Works);
       setAuthor2Works(newAuthor2Works);
@@ -536,6 +613,195 @@ function App() {
     );
   };
 
+  // Temporal Analytics Functions
+  const generatePublicationTrendsData = useCallback(() => {
+    if (author1Works.size === 0 || author2Works.size === 0) return null;
+
+    const author1Name = author1Data?.display_name || 'Author A';
+    const author2Name = author2Data?.display_name || 'Author B';
+
+    // Get all valid years from both authors (filter out invalid years)
+    const allYears = new Set();
+    author1Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && year > 1900 && year <= new Date().getFullYear() + 5) {
+        allYears.add(year);
+      }
+    });
+    author2Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && year > 1900 && year <= new Date().getFullYear() + 5) {
+        allYears.add(year);
+      }
+    });
+
+    const years = Array.from(allYears).sort();
+    
+    // Count publications per year for each author
+    const author1Counts = {};
+    const author2Counts = {};
+    const collaborationCounts = {};
+    const collaborationTracker = new Set(); // Track processed collaborations
+
+    years.forEach(year => {
+      author1Counts[year] = 0;
+      author2Counts[year] = 0;
+      collaborationCounts[year] = 0;
+    });
+
+    // Count author1 publications
+    author1Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && years.includes(year)) {
+        author1Counts[year]++;
+        // Track collaborations by unique work ID to avoid double counting
+        if (work.coauthored && !collaborationTracker.has(work.id)) {
+          collaborationTracker.add(work.id);
+          collaborationCounts[year]++;
+        }
+      }
+    });
+
+    // Count author2 publications (don't double-count collaborations)
+    author2Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && years.includes(year)) {
+        author2Counts[year]++;
+      }
+    });
+
+    return {
+      labels: years,
+      datasets: [
+        {
+          label: author1Name,
+          data: years.map(year => author1Counts[year]),
+          borderColor: 'rgba(74, 144, 226, 0.7)',
+          backgroundColor: 'rgba(74, 144, 226, 0.15)',
+          fill: true,
+          borderWidth: 2,
+          pointBackgroundColor: '#4A90E2',
+          pointBorderColor: '#4A90E2',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+        {
+          label: author2Name,
+          data: years.map(year => author2Counts[year]),
+          borderColor: 'rgba(245, 166, 35, 0.7)',
+          backgroundColor: 'rgba(245, 166, 35, 0.15)',
+          fill: true,
+          borderWidth: 2,
+          pointBackgroundColor: '#F5A623',
+          pointBorderColor: '#F5A623',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+        {
+          label: 'Collaborations',
+          data: years.map(year => collaborationCounts[year]),
+          borderColor: 'rgba(155, 89, 182, 0.7)',
+          backgroundColor: 'rgba(155, 89, 182, 0.15)',
+          fill: true,
+          borderWidth: 2,
+          pointBackgroundColor: '#9B59B6',
+          pointBorderColor: '#9B59B6',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+      ],
+    };
+  }, [author1Works, author2Works, author1Data, author2Data]);
+
+  const generateTimelineData = useCallback(() => {
+    if (author1Works.size === 0 || author2Works.size === 0) return null;
+
+    // Get all valid years
+    const allYears = new Set();
+    author1Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && year > 1900 && year <= new Date().getFullYear() + 5) {
+        allYears.add(year);
+      }
+    });
+    author2Works.forEach(work => {
+      const year = work.publication_year;
+      if (year && year > 1900 && year <= new Date().getFullYear() + 5) {
+        allYears.add(year);
+      }
+    });
+
+    const years = Array.from(allYears).sort();
+    
+    // Count different types of papers per year with deduplication
+    const citingData = [];
+    const citedData = [];
+    const coauthoredData = [];
+
+    years.forEach(year => {
+      let citing = 0;
+      let cited = 0;
+      let coauthored = 0;
+      
+      const processedWorks = new Set(); // Track processed works for this year
+
+      // Count from author1 works
+      author1Works.forEach(work => {
+        if (work.publication_year === year && !processedWorks.has(work.id)) {
+          if (work.citing) citing++;
+          if (work.cited) cited++;
+          if (work.coauthored) {
+            coauthored++;
+            processedWorks.add(work.id); // Mark collaboration as processed
+          }
+        }
+      });
+
+      // Count from author2 works (avoid double-counting collaborations)
+      author2Works.forEach(work => {
+        if (work.publication_year === year && !processedWorks.has(work.id)) {
+          if (work.citing) citing++;
+          if (work.cited) cited++;
+          // Don't count coauthored again - already counted from author1
+        }
+      });
+
+      citingData.push(citing);
+      citedData.push(cited);
+      coauthoredData.push(coauthored);
+    });
+
+    return {
+      labels: years,
+      datasets: [
+        {
+          label: 'Cross-Citations',
+          data: citingData,
+          backgroundColor: '#7FB3D3',
+          borderColor: '#4A90E2',
+          borderWidth: 2,
+        },
+        {
+          label: 'Cited by Each Other',
+          data: citedData,
+          backgroundColor: '#FFB347',
+          borderColor: '#F5A623',
+          borderWidth: 2,
+        },
+        {
+          label: 'Collaborations',
+          data: coauthoredData,
+          backgroundColor: '#DDA0DD',
+          borderColor: '#9B59B6',
+          borderWidth: 2,
+        },
+      ],
+    };
+  }, [author1Works, author2Works]);
+
+  const publicationTrendsData = generatePublicationTrendsData();
+  const timelineData = generateTimelineData();
+
   return (
     <div className="App">
       <div className="title">SciPair</div>
@@ -546,109 +812,297 @@ function App() {
         <a href="https://github.com/scipair/scipair" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
       </div>
       
-      <div className="columns is-multiline">
-        <div className="column is-half">
-          <div className="field">
-            <label className="label">Author A</label>
-            <div className="control autocomplete">
-              <input
-                ref={author1InputRef}
-                type="text"
-                className="input"
-                placeholder="Search author A..."
-                value={author1}
-                onChange={(e) => handleInputChange('author1', e.target.value)}
-                onFocus={() => handleInputFocus('author1')}
-                onBlur={() => handleInputBlur('author1')}
-                disabled={inputsDisabled}
-              />
-              {author1Autocomplete.length > 0 && (
-                <div 
-                  className="autocomplete-items"
-                  style={{
-                    top: autocompletePosition.author1.top || 0,
-                    left: autocompletePosition.author1.left || 0,
-                    width: autocompletePosition.author1.width || 'auto'
-                  }}
-                >
-                  {author1Autocomplete.map((author, index) => (
-                    <div
-                      key={index}
-                      className="autocomplete-item"
-                      onClick={() => selectAuthor(author, 'author1')}
-                    >
-                      <div className="author-name">{author.display_name}</div>
-                      <div className="author-hint">{author.hint || 'Unknown Institution'}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {author1Data && (
-                <div className="author-card">
-                  <div className="author-name">{author1Data.display_name}</div>
-                  <div className="author-hint">{author1Data.hint || 'Unknown Institution'}</div>
-                  <div className="author-id">{author1Data.short_id.split('/')[1]}</div>
-                </div>
-              )}
-              {author1Stats.total > 0 && renderFilterButtons(author1Stats, 'author1')}
-              <div className="author-works-container author1-works">
-                {renderAuthorWorks(author1Works, 'author1')}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="column is-half">
-          <div className="field">
-            <label className="label">Author B</label>
-            <div className="control autocomplete">
-              <input
-                ref={author2InputRef}
-                type="text"
-                className="input"
-                placeholder="Search author B..."
-                value={author2}
-                onChange={(e) => handleInputChange('author2', e.target.value)}
-                onFocus={() => handleInputFocus('author2')}
-                onBlur={() => handleInputBlur('author2')}
-                disabled={inputsDisabled}
-              />
-              {author2Autocomplete.length > 0 && (
-                <div 
-                  className="autocomplete-items"
-                  style={{
-                    top: autocompletePosition.author2.top || 0,
-                    left: autocompletePosition.author2.left || 0,
-                    width: autocompletePosition.author2.width || 'auto'
-                  }}
-                >
-                  {author2Autocomplete.map((author, index) => (
-                    <div
-                      key={index}
-                      className="autocomplete-item"
-                      onClick={() => selectAuthor(author, 'author2')}
-                    >
-                      <div className="author-name">{author.display_name}</div>
-                      <div className="author-hint">{author.hint || 'Unknown Institution'}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {author2Data && (
-                <div className="author-card">
-                  <div className="author-name">{author2Data.display_name}</div>
-                  <div className="author-hint">{author2Data.hint || 'Unknown Institution'}</div>
-                  <div className="author-id">{author2Data.short_id.split('/')[1]}</div>
-                </div>
-              )}
-              {author2Stats.total > 0 && renderFilterButtons(author2Stats, 'author2')}
-              <div className="author-works-container author2-works">
-                {renderAuthorWorks(author2Works, 'author2')}
-              </div>
-            </div>
+      {/* Data Accuracy Notice */}
+      <div className="data-notice">
+        <div className="notice-content">
+          <span className="notice-icon">⚠️</span>
+          <div className="notice-text">
+            <strong>Data Accuracy Note:</strong> Numbers may not be fully accurate as OpenAlex sometimes registers different versions of the same paper, dataset, or preprint as separate publications. We apply deduplication techniques to minimize this issue, but some variations may persist.
           </div>
         </div>
       </div>
+      
+      {/* Tab Navigation */}
+      <div className="tabs">
+        <ul>
+          <li className={activeTab === 'comparison' ? 'is-active' : ''}>
+            <button onClick={() => setActiveTab('comparison')}>
+              Comparison
+            </button>
+          </li>
+          <li className={activeTab === 'analytics' ? 'is-active' : ''}>
+            <button onClick={() => setActiveTab('analytics')}>
+              Analytics
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      {/* Comparison Tab */}
+      {activeTab === 'comparison' && (
+        <div className="columns is-multiline">
+          <div className="column is-half">
+            <div className="field">
+              <label className="label">Author A</label>
+              <div className="control autocomplete">
+                <input
+                  ref={author1InputRef}
+                  type="text"
+                  className="input"
+                  placeholder="Search author A..."
+                  value={author1}
+                  onChange={(e) => handleInputChange('author1', e.target.value)}
+                  onFocus={() => handleInputFocus('author1')}
+                  onBlur={() => handleInputBlur('author1')}
+                  disabled={inputsDisabled}
+                />
+                {author1Autocomplete.length > 0 && (
+                  <div 
+                    className="autocomplete-items"
+                    style={{
+                      top: autocompletePosition.author1.top || 0,
+                      left: autocompletePosition.author1.left || 0,
+                      width: autocompletePosition.author1.width || 'auto'
+                    }}
+                  >
+                    {author1Autocomplete.map((author, index) => (
+                      <div
+                        key={index}
+                        className="autocomplete-item"
+                        onClick={() => selectAuthor(author, 'author1')}
+                      >
+                        <div className="author-name">{author.display_name}</div>
+                        <div className="author-hint">{author.hint || 'Unknown Institution'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {author1Data && (
+                  <div className="author-card">
+                    <div className="author-name">{author1Data.display_name}</div>
+                    <div className="author-hint">{author1Data.hint || 'Unknown Institution'}</div>
+                    <div className="author-id">{author1Data.short_id.split('/')[1]}</div>
+                  </div>
+                )}
+                {author1Stats.total > 0 && renderFilterButtons(author1Stats, 'author1')}
+                <div className="author-works-container author1-works">
+                  {renderAuthorWorks(author1Works, 'author1')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="column is-half">
+            <div className="field">
+              <label className="label">Author B</label>
+              <div className="control autocomplete">
+                <input
+                  ref={author2InputRef}
+                  type="text"
+                  className="input"
+                  placeholder="Search author B..."
+                  value={author2}
+                  onChange={(e) => handleInputChange('author2', e.target.value)}
+                  onFocus={() => handleInputFocus('author2')}
+                  onBlur={() => handleInputBlur('author2')}
+                  disabled={inputsDisabled}
+                />
+                {author2Autocomplete.length > 0 && (
+                  <div 
+                    className="autocomplete-items"
+                    style={{
+                      top: autocompletePosition.author2.top || 0,
+                      left: autocompletePosition.author2.left || 0,
+                      width: autocompletePosition.author2.width || 'auto'
+                    }}
+                  >
+                    {author2Autocomplete.map((author, index) => (
+                      <div
+                        key={index}
+                        className="autocomplete-item"
+                        onClick={() => selectAuthor(author, 'author2')}
+                      >
+                        <div className="author-name">{author.display_name}</div>
+                        <div className="author-hint">{author.hint || 'Unknown Institution'}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {author2Data && (
+                  <div className="author-card">
+                    <div className="author-name">{author2Data.display_name}</div>
+                    <div className="author-hint">{author2Data.hint || 'Unknown Institution'}</div>
+                    <div className="author-id">{author2Data.short_id.split('/')[1]}</div>
+                  </div>
+                )}
+                {author2Stats.total > 0 && renderFilterButtons(author2Stats, 'author2')}
+                <div className="author-works-container author2-works">
+                  {renderAuthorWorks(author2Works, 'author2')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <div className="analytics-container">
+          {author1Data && author2Data && author1Works.size > 0 && author2Works.size > 0 ? (
+            <>
+              <div className="analytics-section">
+                <h3 className="analytics-title">Publication Trends Over Time</h3>
+                <div className="chart-explanation">
+                  <p><strong>📈 What this shows:</strong> The publication activity of both authors across their careers, with special highlighting of years when they collaborated.</p>
+                  <div className="explanation-items">
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#4A90E2'}}></span>
+                      <strong>Blue Line:</strong> {author1Data?.display_name || 'Author A'}'s publications per year
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#F5A623'}}></span>
+                      <strong>Orange Line:</strong> {author2Data?.display_name || 'Author B'}'s publications per year
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#9B59B6'}}></span>
+                      <strong>Purple Line:</strong> Years when they collaborated on papers together
+                    </div>
+                  </div>
+                </div>
+                <div className="chart-container">
+                  {publicationTrendsData && (
+                    <Line
+                      data={publicationTrendsData}
+                      options={{
+                        responsive: true,
+                        plugins: {
+                          title: {
+                            display: true,
+                            text: 'Publications per Year',
+                            font: {
+                              size: 16,
+                              weight: 'bold',
+                            },
+                          },
+                          legend: {
+                            position: 'top',
+                            labels: {
+                              font: {
+                                size: 14,
+                              },
+                            },
+                          },
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            title: {
+                              display: true,
+                              text: 'Number of Publications',
+                              font: {
+                                size: 14,
+                                weight: 'bold',
+                              },
+                            },
+                          },
+                          x: {
+                            title: {
+                              display: true,
+                              text: 'Year',
+                              font: {
+                                size: 14,
+                                weight: 'bold',
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="analytics-section">
+                <h3 className="analytics-title">Relationship Timeline</h3>
+                <div className="chart-explanation">
+                  <p><strong>🔗 What this shows:</strong> The specific academic relationships between the two authors over time, broken down by type of interaction.</p>
+                  <div className="explanation-items">
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#7FB3D3'}}></span>
+                      <strong>Light Blue Bars:</strong> Papers where one author cites the other's work
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#FFB347'}}></span>
+                      <strong>Peach Bars:</strong> Papers where they cite each other's work
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#DDA0DD'}}></span>
+                      <strong>Lavender Bars:</strong> Papers where they worked together as co-authors
+                    </div>
+                  </div>
+                  <p className="chart-note">💡 <em>Higher bars indicate more academic interaction in that year. Multiple relationships can occur in the same year.</em></p>
+                </div>
+                <div className="chart-container">
+                  {timelineData && (
+                    <Bar
+                      data={timelineData}
+                      options={{
+                        responsive: true,
+                        plugins: {
+                          title: {
+                            display: true,
+                            text: 'Citations and Collaborations by Year',
+                            font: {
+                              size: 16,
+                              weight: 'bold',
+                            },
+                          },
+                          legend: {
+                            position: 'top',
+                            labels: {
+                              font: {
+                                size: 14,
+                              },
+                            },
+                          },
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            title: {
+                              display: true,
+                              text: 'Number of Papers',
+                              font: {
+                                size: 14,
+                                weight: 'bold',
+                              },
+                            },
+                          },
+                          x: {
+                            title: {
+                              display: true,
+                              text: 'Year',
+                              font: {
+                                size: 14,
+                                weight: 'bold',
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="analytics-placeholder">
+              <h3>📊 Temporal Analytics</h3>
+              <p>Load two authors in the Comparison tab to see their publication trends and collaboration timeline.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="overlay">
