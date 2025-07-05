@@ -1,91 +1,102 @@
-# SciPair React App
+# SciPair
 
-This is a React version of the SciPair author comparison tool, converted from the original HTML/JavaScript implementation.
+A powerful tool for exploring academic relationships between authors using data from OpenAlex. Compare authors, visualize citations, collaborations, and analyze publication trends over time.
 
-## About
-
-SciPair is a tool to explore relationships between authors using data from OpenAlex. It allows users to compare authors, visualize coauthorships and citations between their works.
+🌐 **Live Demo**: [https://scipair.github.io](https://scipair.github.io)
 
 **Created by:**
 - [Danishjeet Singh](https://singhdan.me)
 - [Filipi N. Silva](https://filipinascimento.github.io)
 
-## Features
+## ✨ Features
 
-- **Author Search**: Search for authors with autocomplete functionality
-- **Author Comparison**: Compare two authors side by side
+### 📊 Author Comparison
+- **Smart Search**: Autocomplete functionality for finding authors
+- **Side-by-Side Comparison**: Compare two authors with their complete publication records
 - **Citation Analysis**: Visualize citing relationships between authors' works
-- **Coauthorship Detection**: Highlight papers that are coauthored
-- **Interactive Filtering**: Toggle between showing all papers or just highlighted ones
-- **Statistics**: View counts of citations, coauthorships, and total works
-- **Direct Links**: Click on papers to view them directly
+- **Coauthorship Detection**: Highlight collaborative papers
 
-## Technology Stack
+### 🎯 Interactive Filtering
+- **Dynamic Filter Buttons**: Click to focus on specific relationship types
+- **Citing A/B**: Papers where one author cites the other
+- **Cited by A/B**: Papers where one author is cited by the other  
+- **Coauthored**: Papers written together
+- **All Papers**: Complete publication list
 
-- **React**: Frontend framework
-- **Axios**: HTTP client for API requests
-- **Bulma CSS**: CSS framework for styling
-- **OpenAlex API**: Data source for academic papers and authors
+### 📈 Temporal Analytics
+- **Publication Trends**: Line charts showing publication counts over time
+- **Collaboration Timeline**: Bar charts displaying citations and collaborations by year
+- **Color-blind Friendly**: Accessible pastel color scheme
 
-## Getting Started
+### 🕸️ Network Visualization
+- **Collaboration Networks**: Interactive visualization of author relationships
+- **Shared Collaborators**: Identify mutual connections between authors
+- **Dynamic Sizing**: Node and edge sizes reflect collaboration strength
+- **Interactive**: Drag, zoom, and hover for detailed exploration
+
+## 🎨 Visual Indicators
+
+- **🔵 Blue (↑)**: Papers where Author A cites Author B
+- **🟠 Orange (↓)**: Papers where Author A is cited by Author B  
+- **🟣 Purple (○)**: Papers coauthored by both authors
+- **🟪 Purple Nodes**: Shared collaborators in network view
+
+## 🚀 Technology Stack
+
+- **React** - Modern frontend framework
+- **Chart.js** - Interactive data visualizations
+- **vis-network** - Network graph visualization
+- **Axios** - HTTP client for API requests
+- **Bulma CSS** - Responsive CSS framework
+- **OpenAlex API** - Comprehensive academic database
+
+## 💻 Development
 
 ### Prerequisites
-
 - Node.js (v14 or later)
 - npm or yarn
 
-### Installation
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-### Running the App
-
+### Local Setup
 ```bash
+# Clone the repository
+git clone https://github.com/scipair/scipair.github.io.git
+cd scipair.github.io
+
+# Install dependencies
+npm install
+
+# Start development server
 npm start
 ```
 
-The app will open in your browser at `http://localhost:3000`.
+The app will open at `http://localhost:3000`.
 
-### Building for Production
-
+### Production Build
 ```bash
 npm run build
 ```
 
-This creates a `build` folder with the production-optimized files.
+## 📖 Usage Guide
 
-## Usage
+1. **Search Authors**: Type author names in the search fields
+2. **Select from Autocomplete**: Choose authors from the dropdown suggestions
+3. **Explore Relationships**: Wait for data to load and view highlighted connections
+4. **Use Filter Buttons**: Click buttons to focus on specific relationship types
+5. **Analyze Trends**: Switch to Analytics tab for temporal insights
+6. **Explore Networks**: View Network tab for collaboration visualization
+7. **Access Papers**: Click any paper title to view the full publication
 
-1. Enter author names in the search fields (Author A and Author B)
-2. Select authors from the autocomplete dropdown
-3. Wait for the app to load all their works
-4. View the highlighted relationships:
-   - **Blue (↑)**: Papers where Author A cites Author B
-   - **Orange (↓)**: Papers where Author A is cited by Author B
-   - **Pink (○)**: Papers coauthored by both authors
-5. Use the toggle buttons to show/hide non-highlighted papers
-6. Click on any paper to view it directly
+## 🔌 API
 
-## API
+Powered by the [OpenAlex API](https://openalex.org/) - a free, comprehensive database of scholarly works. No API key required.
 
-This app uses the [OpenAlex API](https://openalex.org/) to fetch author and publication data. No API key is required.
+## 🤝 Contributing
 
-## Contributing
+We welcome contributions! Feel free to:
+- Report bugs or request features via [GitHub Issues](https://github.com/scipair/scipair.github.io/issues)
+- Submit pull requests for improvements
+- Share feedback and suggestions
 
-Feel free to submit issues and enhancement requests!
+## 📄 License
 
-## License
-
-This project is open source. See the [GitHub repository](https://github.com/scipair/scipair) for more details.
-
-## Conversion Notes
-
-This React version maintains all the functionality of the original HTML/JavaScript version while providing:
-- Better component organization
-- React state management
-- Improved maintainability
-- Modern development workflow
+This project is open source. 
