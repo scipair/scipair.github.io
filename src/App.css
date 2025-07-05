@@ -547,6 +547,83 @@
   justify-content: center;
 }
 
+/* Network Visualization Styles */
+.network-container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.network-section {
+  margin: 0 auto 40px auto;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-width: 1000px;
+}
+
+.network-title {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+  text-align: center;
+}
+
+.network-visualization {
+  position: relative;
+  margin: 20px auto;
+  max-width: 900px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.network-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.network-placeholder h3 {
+  font-size: 2em;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.network-placeholder p {
+  font-size: 1.2em;
+  color: #666;
+}
+
+.network-explanation {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 0 auto 20px auto;
+  border-left: 4px solid #4A90E2;
+  max-width: 900px;
+}
+
+.network-explanation p {
+  margin: 0 0 15px 0;
+  font-size: 1.1em;
+  color: #333;
+  line-height: 1.6;
+}
+
+.network-note {
+  font-size: 0.95em;
+  color: #666;
+  background: #fff3cd;
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 4px solid #ffc107;
+  margin: 15px 0 0 0;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .columns {
@@ -559,5 +636,25 @@
   
   .column {
     width: 100% !important;
+  }
+  
+  .network-container {
+    width: 95%;
+    padding: 10px;
+  }
+  
+  .network-section {
+    max-width: 100%;
+    margin: 0 10px 40px 10px;
+  }
+  
+  .network-explanation {
+    max-width: 100%;
+    margin: 0 0 20px 0;
+  }
+  
+  .network-visualization {
+    max-width: 100%;
+    margin: 20px 0;
   }
 }

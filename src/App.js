@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import './App.css';
 import {
@@ -14,6 +14,7 @@ import {
   TimeScale,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
+import { Network } from 'vis-network';
 
 ChartJS.register(
   CategoryScale,
@@ -40,6 +41,9 @@ function App() {
   const [author2Stats, setAuthor2Stats] = useState({ citing: 0, cited: 0, coauthored: 0, total: 0 });
   const [activeFilter, setActiveFilter] = useState({ author1: 'all', author2: 'all' });
   const [activeTab, setActiveTab] = useState('comparison');
+  const [author1Collaborators, setAuthor1Collaborators] = useState(new Map());
+  const [author2Collaborators, setAuthor2Collaborators] = useState(new Map());
+  const [networkData, setNetworkData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [inputsDisabled, setInputsDisabled] = useState(false);
   const [userTyping, setUserTyping] = useState({ author1: false, author2: false });
@@ -49,6 +53,7 @@ function App() {
   const debounceTimer = useRef(null);
   const author1InputRef = useRef(null);
   const author2InputRef = useRef(null);
+  const networkContainerRef = useRef(null);
 
   // Default authors
   const defaultAuthor1 = 'Filippo Menczer';
@@ -65,6 +70,7 @@ function App() {
     let cursor = '*';
     let hasMore = true;
     const worksMap = new Map();
+    const collaboratorsMap = new Map();
     const seenIds = new Set();
     let totalFetched = 0;
     let duplicatesFound = 0;
@@ -82,6 +88,7 @@ function App() {
         cursor = response.data.meta.next_cursor;
         hasMore = !!cursor;
 
+        // eslint-disable-next-line no-loop-func
         works.forEach(work => {
           totalFetched++;
           
@@ -111,6 +118,34 @@ function App() {
           };
           
           worksMap.set(work.id, workData);
+
+          // Extract collaborators from authorships
+          if (work.authorships && Array.isArray(work.authorships)) {
+            work.authorships.forEach(authorship => {
+              if (authorship.author && authorship.author.id && authorship.author.display_name) {
+                const collaboratorId = authorship.author.id;
+                const collaboratorName = authorship.author.display_name;
+                
+                // Skip if this is the main author we're analyzing
+                if (collaboratorId === `https://openalex.org/${authorId}`) {
+                  return;
+                }
+                
+                if (!collaboratorsMap.has(collaboratorId)) {
+                  collaboratorsMap.set(collaboratorId, {
+                    id: collaboratorId,
+                    name: collaboratorName,
+                    publication_count: 0,
+                    institution: authorship.institutions?.[0]?.display_name || 'Unknown Institution'
+                  });
+                }
+                
+                // Increment collaboration count
+                const collaborator = collaboratorsMap.get(collaboratorId);
+                collaborator.publication_count++;
+              }
+            });
+          }
         });
 
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -118,6 +153,7 @@ function App() {
 
       // Log deduplication stats
       console.log(`Author ${inputId}: Fetched ${totalFetched} works, found ${duplicatesFound} duplicates, keeping ${worksMap.size} unique works`);
+      console.log(`Author ${inputId}: Found ${collaboratorsMap.size} unique collaborators`);
 
       // Sort works by publication year (most recent first)
       const sortedWorks = new Map([...worksMap.entries()].sort((a, b) => {
@@ -128,8 +164,10 @@ function App() {
 
       if (inputId === 'author1') {
         setAuthor1Works(sortedWorks);
+        setAuthor1Collaborators(collaboratorsMap);
       } else {
         setAuthor2Works(sortedWorks);
+        setAuthor2Collaborators(collaboratorsMap);
       }
 
     } catch (error) {
@@ -370,6 +408,8 @@ function App() {
     };
   }, [author1Autocomplete.length, author2Autocomplete.length]);
 
+
+
   const handleInputChange = (inputId, value) => {
     // Mark user as typing
     setUserTyping(prev => ({ ...prev, [inputId]: true }));
@@ -511,11 +551,13 @@ function App() {
       setAuthor1Works(new Map());
       setAuthor1Stats({ citing: 0, cited: 0, coauthored: 0, total: 0 });
       setAuthor1Autocomplete([]);
+      setAuthor1Collaborators(new Map());
     } else {
       setAuthor2Data(null);
       setAuthor2Works(new Map());
       setAuthor2Stats({ citing: 0, cited: 0, coauthored: 0, total: 0 });
       setAuthor2Autocomplete([]);
+      setAuthor2Collaborators(new Map());
     }
     
     // Reset filter to 'all' when clearing data
@@ -799,8 +841,306 @@ function App() {
     };
   }, [author1Works, author2Works]);
 
+  // Network Building Function
+  const buildNetworkData = useCallback(() => {
+    if (author1Collaborators.size === 0 && author2Collaborators.size === 0) return null;
+
+    const nodes = [];
+    const edges = [];
+    
+    // Add the two main authors as central nodes
+    if (author1Data) {
+      nodes.push({
+        id: author1Data.short_id,
+        label: author1Data.display_name,
+        color: {
+          background: '#4A90E2',
+          border: '#2980B9',
+          highlight: {
+            background: '#5BA0F2',
+            border: '#2980B9'
+          }
+        },
+        size: 40,
+        group: 'author1',
+        title: `${author1Data.display_name}<br/>${author1Data.hint || 'Unknown Institution'}<br/>Publications: ${author1Works.size}`,
+        font: { size: 16, color: '#000000' }
+      });
+    }
+    
+    if (author2Data) {
+      nodes.push({
+        id: author2Data.short_id,
+        label: author2Data.display_name,
+        color: {
+          background: '#F5A623',
+          border: '#E67E22',
+          highlight: {
+            background: '#F39C12',
+            border: '#E67E22'
+          }
+        },
+        size: 40,
+        group: 'author2',
+        title: `${author2Data.display_name}<br/>${author2Data.hint || 'Unknown Institution'}<br/>Publications: ${author2Works.size}`,
+        font: { size: 16, color: '#000000' }
+      });
+    }
+
+    // Track all collaborators to avoid duplicates
+    const allCollaborators = new Map();
+    
+    // Add author1's collaborators
+    author1Collaborators.forEach((collaborator, id) => {
+      if (!allCollaborators.has(id)) {
+        allCollaborators.set(id, {
+          ...collaborator,
+          connectedTo: ['author1'],
+          totalCollaborations: collaborator.publication_count
+        });
+      }
+    });
+    
+    // Add author2's collaborators and mark shared ones
+    author2Collaborators.forEach((collaborator, id) => {
+      if (allCollaborators.has(id)) {
+        // This is a shared collaborator
+        const existing = allCollaborators.get(id);
+        existing.connectedTo.push('author2');
+        existing.totalCollaborations += collaborator.publication_count;
+        existing.isShared = true;
+      } else {
+        allCollaborators.set(id, {
+          ...collaborator,
+          connectedTo: ['author2'],
+          totalCollaborations: collaborator.publication_count
+        });
+      }
+    });
+
+    // Add collaborator nodes (limit to top 20 per author to avoid clutter)
+    const author1TopCollaborators = Array.from(author1Collaborators.entries())
+      .sort((a, b) => b[1].publication_count - a[1].publication_count)
+      .slice(0, 20);
+    
+    const author2TopCollaborators = Array.from(author2Collaborators.entries())
+      .sort((a, b) => b[1].publication_count - a[1].publication_count)
+      .slice(0, 20);
+
+    const addedCollaborators = new Set();
+
+    // Add author1's top collaborators
+    author1TopCollaborators.forEach(([id, collaborator]) => {
+      if (!addedCollaborators.has(id)) {
+        const nodeSize = Math.max(10, Math.min(30, collaborator.publication_count * 2));
+        const isShared = author2Collaborators.has(id);
+        
+        nodes.push({
+          id: id,
+          label: collaborator.name,
+          color: {
+            background: isShared ? '#9B59B6' : '#7FB3D3',
+            border: isShared ? '#8E44AD' : '#3498DB',
+            highlight: {
+              background: isShared ? '#AF6BD8' : '#85C1E9',
+              border: isShared ? '#8E44AD' : '#3498DB'
+            }
+          },
+          size: nodeSize,
+          group: isShared ? 'shared' : 'author1_collab',
+          title: `${collaborator.name}<br/>${collaborator.institution}<br/>Collaborations: ${collaborator.publication_count}${isShared ? ' (Shared collaborator)' : ''}`,
+          font: { size: 12, color: '#000000' }
+        });
+        
+        addedCollaborators.add(id);
+      }
+    });
+
+    // Add author2's top collaborators (skip if already added)
+    author2TopCollaborators.forEach(([id, collaborator]) => {
+      if (!addedCollaborators.has(id)) {
+        const nodeSize = Math.max(10, Math.min(30, collaborator.publication_count * 2));
+        
+        nodes.push({
+          id: id,
+          label: collaborator.name,
+          color: {
+            background: '#FFB347',
+            border: '#E67E22',
+            highlight: {
+              background: '#F39C12',
+              border: '#E67E22'
+            }
+          },
+          size: nodeSize,
+          group: 'author2_collab',
+          title: `${collaborator.name}<br/>${collaborator.institution}<br/>Collaborations: ${collaborator.publication_count}`,
+          font: { size: 12, color: '#000000' }
+        });
+        
+        addedCollaborators.add(id);
+      }
+    });
+
+    // Add edges between authors and their collaborators
+    author1TopCollaborators.forEach(([id, collaborator]) => {
+      if (author1Data) {
+        const edgeWidth = Math.max(1, Math.min(8, collaborator.publication_count));
+        edges.push({
+          from: author1Data.short_id,
+          to: id,
+          width: edgeWidth,
+          color: {
+            color: '#4A90E2',
+            opacity: 0.8
+          },
+          smooth: { type: 'continuous' }
+        });
+      }
+    });
+
+    author2TopCollaborators.forEach(([id, collaborator]) => {
+      if (author2Data) {
+        const edgeWidth = Math.max(1, Math.min(8, collaborator.publication_count));
+        edges.push({
+          from: author2Data.short_id,
+          to: id,
+          width: edgeWidth,
+          color: {
+            color: '#F5A623',
+            opacity: 0.8
+          },
+          smooth: { type: 'continuous' }
+        });
+      }
+    });
+
+    // Add edge between the two main authors if they have collaborations
+    if (author1Data && author2Data && author1Stats.coauthored > 0) {
+      edges.push({
+        from: author1Data.short_id,
+        to: author2Data.short_id,
+        width: Math.max(2, Math.min(10, author1Stats.coauthored * 2)),
+        color: {
+          color: '#9B59B6',
+          opacity: 0.9
+        },
+        label: `${author1Stats.coauthored} collab${author1Stats.coauthored > 1 ? 's' : ''}`,
+        font: { size: 12, color: '#000000' }
+      });
+    }
+
+    return { nodes, edges };
+  }, [author1Data, author2Data, author1Collaborators, author2Collaborators, author1Works.size, author2Works.size, author1Stats]);
+
   const publicationTrendsData = generatePublicationTrendsData();
   const timelineData = generateTimelineData();
+  
+  // Generate network data using useMemo to prevent unnecessary recalculations
+  const networkVisualizationData = useMemo(() => {
+    return buildNetworkData();
+  }, [buildNetworkData]);
+
+  // Network visualization effect
+  useEffect(() => {
+    if (activeTab === 'network' && networkVisualizationData && networkContainerRef.current) {
+      const { nodes, edges } = networkVisualizationData;
+      
+      console.log('Initializing network with', nodes.length, 'nodes and', edges.length, 'edges');
+      
+      // Clear any existing network
+      if (networkData) {
+        networkData.destroy();
+        setNetworkData(null);
+      }
+      
+      const data = {
+        nodes: nodes,
+        edges: edges
+      };
+      
+      const options = {
+        layout: {
+          improvedLayout: true,
+          hierarchical: false
+        },
+        physics: {
+          enabled: true,
+          solver: 'forceAtlas2Based',
+          forceAtlas2Based: {
+            gravitationalConstant: -26,
+            centralGravity: 0.005,
+            springLength: 230,
+            springConstant: 0.18,
+            damping: 0.15
+          },
+          stabilization: {
+            iterations: 150
+          }
+        },
+        nodes: {
+          borderWidth: 2,
+          borderWidthSelected: 3,
+          font: {
+            size: 14,
+            color: '#000000'
+          },
+          shape: 'dot'
+        },
+        edges: {
+          color: {
+            opacity: 0.8
+          },
+          smooth: {
+            enabled: true,
+            type: 'continuous',
+            roundness: 0.5
+          }
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 200,
+          hideEdgesOnDrag: true,
+          hideEdgesOnZoom: true
+        }
+      };
+
+      try {
+        const network = new Network(networkContainerRef.current, data, options);
+        
+        // Store network instance to allow cleanup
+        setNetworkData(network);
+        
+        // Set up event listeners
+        network.on('stabilizationProgress', function(params) {
+          console.log('Network stabilization progress:', Math.round(params.iterations/params.total * 100) + '%');
+        });
+        
+        network.on('stabilizationIterationsDone', function() {
+          console.log('Network stabilization complete');
+        });
+        
+        console.log('Network initialized successfully');
+        
+        return () => {
+          if (network) {
+            network.destroy();
+          }
+        };
+      } catch (error) {
+        console.error('Error initializing network:', error);
+      }
+    }
+  }, [activeTab, networkVisualizationData]);
+
+  // Cleanup network on unmount
+  useEffect(() => {
+    return () => {
+      if (networkData) {
+        networkData.destroy();
+      }
+    };
+  }, [networkData]);
 
   return (
     <div className="App">
@@ -833,6 +1173,11 @@ function App() {
           <li className={activeTab === 'analytics' ? 'is-active' : ''}>
             <button onClick={() => setActiveTab('analytics')}>
               Analytics
+            </button>
+          </li>
+          <li className={activeTab === 'network' ? 'is-active' : ''}>
+            <button onClick={() => setActiveTab('network')}>
+              Network
             </button>
           </li>
         </ul>
@@ -1099,6 +1444,54 @@ function App() {
             <div className="analytics-placeholder">
               <h3>📊 Temporal Analytics</h3>
               <p>Load two authors in the Comparison tab to see their publication trends and collaboration timeline.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Network Tab */}
+      {activeTab === 'network' && (
+        <div className="network-container">
+          {author1Data && author2Data && (author1Collaborators.size > 0 || author2Collaborators.size > 0) ? (
+            <>
+              <div className="network-section">
+                <h3 className="network-title">Collaboration Network</h3>
+                <div className="network-explanation">
+                  <p><strong>🌐 What this shows:</strong> The collaborative network of both authors, showing their most frequent collaborators and research connections.</p>
+                  <div className="explanation-items">
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#4A90E2'}}></span>
+                      <strong>Blue:</strong> {author1Data?.display_name || 'Author A'} and their collaborators
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#F5A623'}}></span>
+                      <strong>Orange:</strong> {author2Data?.display_name || 'Author B'} and their collaborators
+                    </div>
+                    <div className="explanation-item">
+                      <span className="legend-color" style={{backgroundColor: '#9B59B6'}}></span>
+                      <strong>Purple:</strong> Shared collaborators or direct collaboration
+                    </div>
+                  </div>
+                  <p className="network-note">💡 <em>Node size represents number of collaborations. Edge thickness shows collaboration strength. Hover over nodes for details.</em></p>
+                </div>
+                                 <div className="network-visualization">
+                   <div 
+                     ref={networkContainerRef} 
+                     style={{ 
+                       width: '100%', 
+                       height: '600px',
+                       border: '1px solid #ddd',
+                       borderRadius: '8px',
+                       backgroundColor: '#fafafa'
+                     }}
+                   ></div>
+                 </div>
+              </div>
+            </>
+          ) : (
+            <div className="network-placeholder">
+              <h3>🌐 Collaboration Network</h3>
+              <p>Load two authors in the Comparison tab to see their collaboration network and research connections.</p>
             </div>
           )}
         </div>
