@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
   TimeScale,
+  Filler,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { Network } from 'vis-network';
@@ -25,7 +26,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  TimeScale
+  TimeScale,
+  Filler
 );
 
 function App() {
@@ -45,9 +47,9 @@ function App() {
   const [author2Collaborators, setAuthor2Collaborators] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const [inputsDisabled, setInputsDisabled] = useState(false);
-  const [userTyping, setUserTyping] = useState({ author1: false, author2: false });
   const [autocompletePosition, setAutocompletePosition] = useState({ author1: {}, author2: {} });
   const [isHighlighting, setIsHighlighting] = useState(false);
+  const [loadingFromUrl, setLoadingFromUrl] = useState(false);
   
   const debounceTimer = useRef(null);
   const author1InputRef = useRef(null);
@@ -61,10 +63,20 @@ function App() {
 
   // Function definitions first
   const updateHash = useCallback(() => {
-    const author1Id = author1Data?.short_id.split('/')[1] || '';
-    const author2Id = author2Data?.short_id.split('/')[1] || '';
-    window.location.hash = `${author1Id};${author2Id}`;
-  }, [author1Data, author2Data]);
+    const author1Id = author1Data?.short_id?.split('/').pop() || '';
+    const author2Id = author2Data?.short_id?.split('/').pop() || '';
+    
+    // Only update hash if we have both authors
+    if (author1Id && author2Id) {
+      window.location.hash = `${author1Id};${author2Id}`;
+    } else {
+      // Don't clear hash if we're loading from URL (to preserve URL sharing)
+      // Only clear if both authors are explicitly empty and not loading from URL
+      if (!author1Data && !author2Data && !loading && !loadingFromUrl) {
+        window.location.hash = '';
+      }
+    }
+  }, [author1Data, author2Data, loading, loadingFromUrl]);
 
   const fetchAuthorWorks = useCallback(async (authorId, inputId) => {
     let cursor = '*';
@@ -72,8 +84,7 @@ function App() {
     const worksMap = new Map();
     const collaboratorsMap = new Map();
     const seenIds = new Set();
-    let totalFetched = 0;
-    let duplicatesFound = 0;
+
 
     try {
       // Set loading state if not already set
@@ -82,19 +93,19 @@ function App() {
         setInputsDisabled(true);
       }
       
+      // Ensure we have the full OpenAlex URL format for the API
+      const fullAuthorId = authorId.startsWith('https://') ? authorId : `https://openalex.org/${authorId}`;
+      
       while (hasMore) {
-        const response = await axios.get(`https://api.openalex.org/works?per_page=200&filter=authorships.author.id:${authorId}&cursor=${cursor}`);
+        const response = await axios.get(`https://api.openalex.org/works?per_page=200&filter=authorships.author.id:${fullAuthorId}&cursor=${cursor}`);
         const works = response.data.results;
         cursor = response.data.meta.next_cursor;
         hasMore = !!cursor;
 
         // eslint-disable-next-line no-loop-func
         works.forEach(work => {
-          totalFetched++;
-          
           // Skip if we've already seen this work ID
           if (seenIds.has(work.id)) {
-            duplicatesFound++;
             return;
           }
           
@@ -127,7 +138,7 @@ function App() {
                 const collaboratorName = authorship.author.display_name;
                 
                 // Skip if this is the main author we're analyzing
-                if (collaboratorId === `https://openalex.org/${authorId}`) {
+                if (collaboratorId === fullAuthorId) {
                   return;
                 }
                 
@@ -151,9 +162,7 @@ function App() {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Log deduplication stats
-      console.log(`Author ${inputId}: Fetched ${totalFetched} works, found ${duplicatesFound} duplicates, keeping ${worksMap.size} unique works`);
-      console.log(`Author ${inputId}: Found ${collaboratorsMap.size} unique collaborators`);
+
 
       // Sort works by publication year (most recent first)
       const sortedWorks = new Map([...worksMap.entries()].sort((a, b) => {
@@ -171,7 +180,6 @@ function App() {
       }
 
     } catch (error) {
-      console.error('Error fetching works:', error);
       // Clear loading states on error
       setLoading(false);
       setInputsDisabled(false);
@@ -189,10 +197,11 @@ function App() {
       
       let author = null;
       
-      // If it looks like an OpenAlex ID (starts with 'A'), search by ID
-      if (query.startsWith('A') && query.length > 10) {
+      // If it looks like an OpenAlex ID (starts with 'A' or is numeric), search by ID
+      if ((query.startsWith('A') && query.length > 10) || (!isNaN(query) && query.length > 8)) {
         try {
-          const response = await axios.get(`https://api.openalex.org/authors/${query}`);
+          const authorId = query.startsWith('A') ? query : `A${query}`;
+          const response = await axios.get(`https://api.openalex.org/authors/${authorId}`);
           if (response.data) {
             author = {
               display_name: response.data.display_name,
@@ -201,7 +210,7 @@ function App() {
             };
           }
         } catch (error) {
-          console.log('ID search failed, trying name search');
+          // ID search failed, trying name search
         }
       }
       
@@ -216,34 +225,26 @@ function App() {
       
       if (author) {
         if (inputId === 'author1') {
-          // Only set if user is not currently typing
-          if (!userTyping.author1) {
-            setAuthor1(author.display_name);
-          }
+          setAuthor1(author.display_name);
           setAuthor1Data(author);
           // Clear existing works to prevent glitching
           setAuthor1Works(new Map());
           setAuthor1Stats({ citing: 0, cited: 0, coauthored: 0, total: 0 });
         } else {
-          // Only set if user is not currently typing
-          if (!userTyping.author2) {
-            setAuthor2(author.display_name);
-          }
+          setAuthor2(author.display_name);
           setAuthor2Data(author);
           // Clear existing works to prevent glitching
           setAuthor2Works(new Map());
           setAuthor2Stats({ citing: 0, cited: 0, coauthored: 0, total: 0 });
         }
-        await fetchAuthorWorks(author.short_id.split('/')[1], inputId);
-        updateHash();
+        await fetchAuthorWorks(author.short_id, inputId);
       }
     } catch (error) {
-      console.error('Error selecting default author:', error);
       // Clear loading states on error
       setLoading(false);
       setInputsDisabled(false);
     }
-  }, [fetchAuthorWorks, updateHash, defaultAuthor1, defaultAuthor2, userTyping]);
+  }, [fetchAuthorWorks, defaultAuthor1, defaultAuthor2]);
 
   const highlightCitations = useCallback(() => {
     if (author1Works.size === 0 || author2Works.size === 0 || isHighlighting) return;
@@ -327,7 +328,7 @@ function App() {
         });
       });
 
-      console.log(`Highlighting complete: Author1 (${author1CitingCount} citing, ${author1CitedCount} cited, ${author1CoauthoredCount} coauthored) Author2 (${author2CitingCount} citing, ${author2CitedCount} cited, ${author2CoauthoredCount} coauthored)`);
+
 
       setAuthor1Works(newAuthor1Works);
       setAuthor2Works(newAuthor2Works);
@@ -356,9 +357,20 @@ function App() {
     const hash = window.location.hash.substring(1);
     if (hash) {
       const [author1Id, author2Id] = hash.split(';');
-      // Don't set the input values to IDs, let selectDefaultAuthor handle it
-      selectDefaultAuthor('author1', author1Id);
-      selectDefaultAuthor('author2', author2Id);
+      // Only proceed if we have both author IDs
+      if (author1Id && author2Id) {
+        // Set flag to indicate we're loading from URL
+        setLoadingFromUrl(true);
+        selectDefaultAuthor('author1', author1Id);
+        selectDefaultAuthor('author2', author2Id);
+      } else {
+        // If hash is incomplete, clear it and load defaults
+        window.location.hash = '';
+        setAuthor1(defaultAuthor1);
+        setAuthor2(defaultAuthor2);
+        selectDefaultAuthor('author1');
+        selectDefaultAuthor('author2');
+      }
     } else {
       setAuthor1(defaultAuthor1);
       setAuthor2(defaultAuthor2);
@@ -367,6 +379,17 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Remove dependencies to prevent re-running when user is typing
+
+  // Update URL hash when both authors are loaded
+  useEffect(() => {
+    if (author1Data && author2Data) {
+      updateHash();
+      // Clear loading from URL flag when both authors are loaded
+      if (loadingFromUrl) {
+        setLoadingFromUrl(false);
+      }
+    }
+  }, [author1Data, author2Data, updateHash, loadingFromUrl]);
 
   // Trigger highlighting when both authors have works loaded
   useEffect(() => {
@@ -411,9 +434,6 @@ function App() {
 
 
   const handleInputChange = (inputId, value) => {
-    // Mark user as typing
-    setUserTyping(prev => ({ ...prev, [inputId]: true }));
-    
     // Immediately update the input value to prevent glitching
     if (inputId === 'author1') {
       setAuthor1(value);
@@ -450,11 +470,6 @@ function App() {
         setAuthor2Autocomplete([]);
       }
     }
-    
-    // Clear typing state after a delay
-    setTimeout(() => {
-      setUserTyping(prev => ({ ...prev, [inputId]: false }));
-    }, 1000);
   };
 
   const updateAutocompletePosition = (inputId) => {
@@ -473,15 +488,11 @@ function App() {
   };
 
   const handleInputFocus = (inputId) => {
-    setUserTyping(prev => ({ ...prev, [inputId]: true }));
     updateAutocompletePosition(inputId);
   };
 
   const handleInputBlur = (inputId) => {
-    // Clear typing state after a short delay to allow for autocomplete selection
-    setTimeout(() => {
-      setUserTyping(prev => ({ ...prev, [inputId]: false }));
-    }, 200);
+    // Handle blur event for input field
   };
 
   const throttledFetchAuthors = (inputId, query) => {
@@ -514,7 +525,7 @@ function App() {
       // Update position when showing autocomplete
       updateAutocompletePosition(inputId);
     } catch (error) {
-      console.error('Error fetching authors:', error);
+      // Error fetching authors
     }
   };
 
@@ -541,8 +552,7 @@ function App() {
       setAuthor2Stats({ citing: 0, cited: 0, coauthored: 0, total: 0 });
     }
     
-    fetchAuthorWorks(author.short_id.split('/')[1], inputId);
-    updateHash();
+    fetchAuthorWorks(author.short_id, inputId);
   };
 
   const clearAuthorData = (inputId) => {
@@ -843,7 +853,68 @@ function App() {
 
   // Network Building Function
   const buildNetworkData = useCallback(() => {
-    if (author1Collaborators.size === 0 && author2Collaborators.size === 0) return null;
+    // Only return null if we don't have both authors
+    if (!author1Data || !author2Data) {
+      return null;
+    }
+    
+    // Even if no collaborators found, still show the two main authors
+    if (author1Collaborators.size === 0 && author2Collaborators.size === 0) {
+      // Create minimal network with just the two authors
+      const nodes = [];
+      const edges = [];
+      
+      nodes.push({
+        id: `main_${author1Data.short_id}`,
+        label: author1Data.display_name,
+        color: {
+          background: '#4A90E2',
+          border: '#2980B9',
+          highlight: {
+            background: '#5BA0F2',
+            border: '#2980B9'
+          }
+        },
+        size: 40,
+        group: 'author1',
+        title: `${author1Data.display_name}<br/>${author1Data.hint || 'Unknown Institution'}<br/>Publications: ${author1Works.size}`,
+        font: { size: 16, color: '#000000' }
+      });
+      
+      nodes.push({
+        id: `main_${author2Data.short_id}`,
+        label: author2Data.display_name,
+        color: {
+          background: '#F5A623',
+          border: '#E67E22',
+          highlight: {
+            background: '#F39C12',
+            border: '#E67E22'
+          }
+        },
+        size: 40,
+        group: 'author2',
+        title: `${author2Data.display_name}<br/>${author2Data.hint || 'Unknown Institution'}<br/>Publications: ${author2Works.size}`,
+        font: { size: 16, color: '#000000' }
+      });
+      
+      // Add edge if they have collaborations
+      if (author1Stats.coauthored > 0) {
+        edges.push({
+          from: `main_${author1Data.short_id}`,
+          to: `main_${author2Data.short_id}`,
+          width: Math.max(2, Math.min(10, author1Stats.coauthored * 2)),
+          color: {
+            color: '#9B59B6',
+            opacity: 0.9
+          },
+          label: `${author1Stats.coauthored} collab${author1Stats.coauthored > 1 ? 's' : ''}`,
+          font: { size: 12, color: '#000000' }
+        });
+      }
+      
+      return { nodes, edges };
+    }
 
     const nodes = [];
     const edges = [];
@@ -851,7 +922,7 @@ function App() {
     // Add the two main authors as central nodes
     if (author1Data) {
       nodes.push({
-        id: author1Data.short_id,
+        id: `main_${author1Data.short_id}`,
         label: author1Data.display_name,
         color: {
           background: '#4A90E2',
@@ -870,7 +941,7 @@ function App() {
     
     if (author2Data) {
       nodes.push({
-        id: author2Data.short_id,
+        id: `main_${author2Data.short_id}`,
         label: author2Data.display_name,
         color: {
           background: '#F5A623',
@@ -936,7 +1007,7 @@ function App() {
         const isShared = author2Collaborators.has(id);
         
         nodes.push({
-          id: id,
+          id: `collab_${id}`,
           label: collaborator.name,
           color: {
             background: isShared ? '#9B59B6' : '#7FB3D3',
@@ -962,7 +1033,7 @@ function App() {
         const nodeSize = Math.max(10, Math.min(30, collaborator.publication_count * 2));
         
         nodes.push({
-          id: id,
+          id: `collab_${id}`,
           label: collaborator.name,
           color: {
             background: '#FFB347',
@@ -987,8 +1058,8 @@ function App() {
       if (author1Data) {
         const edgeWidth = Math.max(1, Math.min(8, collaborator.publication_count));
         edges.push({
-          from: author1Data.short_id,
-          to: id,
+          from: `main_${author1Data.short_id}`,
+          to: `collab_${id}`,
           width: edgeWidth,
           color: {
             color: '#4A90E2',
@@ -1003,8 +1074,8 @@ function App() {
       if (author2Data) {
         const edgeWidth = Math.max(1, Math.min(8, collaborator.publication_count));
         edges.push({
-          from: author2Data.short_id,
-          to: id,
+          from: `main_${author2Data.short_id}`,
+          to: `collab_${id}`,
           width: edgeWidth,
           color: {
             color: '#F5A623',
@@ -1018,8 +1089,8 @@ function App() {
     // Add edge between the two main authors if they have collaborations
     if (author1Data && author2Data && author1Stats.coauthored > 0) {
       edges.push({
-        from: author1Data.short_id,
-        to: author2Data.short_id,
+        from: `main_${author1Data.short_id}`,
+        to: `main_${author2Data.short_id}`,
         width: Math.max(2, Math.min(10, author1Stats.coauthored * 2)),
         color: {
           color: '#9B59B6',
@@ -1045,8 +1116,6 @@ function App() {
   useEffect(() => {
     if (activeTab === 'network' && networkVisualizationData && networkContainerRef.current) {
       const { nodes, edges } = networkVisualizationData;
-      
-      console.log('Initializing network with', nodes.length, 'nodes and', edges.length, 'edges');
       
       const data = {
         nodes: nodes,
@@ -1099,7 +1168,7 @@ function App() {
         }
       };
 
-      try {
+              try {
         // Clear any existing network
         if (networkInstanceRef.current) {
           networkInstanceRef.current.destroy();
@@ -1111,17 +1180,6 @@ function App() {
         // Store network instance in ref
         networkInstanceRef.current = network;
         
-        // Set up event listeners
-        network.on('stabilizationProgress', function(params) {
-          console.log('Network stabilization progress:', Math.round(params.iterations/params.total * 100) + '%');
-        });
-        
-        network.on('stabilizationIterationsDone', function() {
-          console.log('Network stabilization complete');
-        });
-        
-        console.log('Network initialized successfully');
-        
         return () => {
           if (networkInstanceRef.current) {
             networkInstanceRef.current.destroy();
@@ -1129,7 +1187,10 @@ function App() {
           }
         };
       } catch (error) {
-        console.error('Error initializing network:', error);
+        // Error initializing network - show minimal message
+        if (networkContainerRef.current) {
+          networkContainerRef.current.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">Network visualization error. Please refresh the page.</p>';
+        }
       }
     }
   }, [activeTab, networkVisualizationData]);
@@ -1159,7 +1220,7 @@ function App() {
         <div className="notice-content">
           <span className="notice-icon">⚠️</span>
           <div className="notice-text">
-            <strong>Data Accuracy Note:</strong> Numbers may not be fully accurate as OpenAlex sometimes registers different versions of the same paper, dataset, or preprint as separate publications. We apply deduplication techniques to minimize this issue, but some variations may persist.
+            <strong>Data Note:</strong> OpenAlex sometimes registers different versions of the same work as separate publications. Numbers shown are based on available data and may have minor variations.
           </div>
         </div>
       </div>
@@ -1454,7 +1515,7 @@ function App() {
       {/* Network Tab */}
       {activeTab === 'network' && (
         <div className="network-container">
-          {author1Data && author2Data && (author1Collaborators.size > 0 || author2Collaborators.size > 0) ? (
+          {author1Data && author2Data ? (
             <>
               <div className="network-section">
                 <h3 className="network-title">Collaboration Network</h3>
@@ -1476,18 +1537,30 @@ function App() {
                   </div>
                   <p className="network-note">💡 <em>Node size represents number of collaborations. Edge thickness shows collaboration strength. Hover over nodes for details.</em></p>
                 </div>
-                                 <div className="network-visualization">
-                   <div 
-                     ref={networkContainerRef} 
-                     style={{ 
-                       width: '100%', 
-                       height: '600px',
-                       border: '1px solid #ddd',
-                       borderRadius: '8px',
-                       backgroundColor: '#fafafa'
-                     }}
-                   ></div>
-                 </div>
+                <div className="network-visualization">
+                  <div 
+                    ref={networkContainerRef} 
+                    style={{ 
+                      width: '100%', 
+                      height: '600px',
+                      border: '1px solid #ddd',
+                      borderRadius: '8px',
+                      backgroundColor: '#fafafa'
+                    }}
+                  >
+                    {!networkVisualizationData && (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        height: '100%', 
+                        color: '#666' 
+                      }}>
+                        Loading network...
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </>
           ) : (
