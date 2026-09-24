@@ -88,7 +88,7 @@ npm run build
 
 ## 🔌 API
 
-Powered by the [OpenAlex API](https://openalex.org/) - a free, comprehensive database of scholarly works. No API key required.
+Powered by the [OpenAlex API](https://openalex.org/), a free database of scholarly works. Anonymous requests continue to work for casual use; an optional OpenAlex API key increases the daily budget and can be passed to the client methods as `apiKey`. The client uses field selection, cursor paging, abortable requests, bounded retry backoff, and short-lived memory/session caching for completed author-work results.
 
 ## 🤝 Contributing
 
