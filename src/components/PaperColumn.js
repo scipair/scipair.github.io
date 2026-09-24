@@ -1,11 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Icon from './Icon';
-const filters = [
-  ['all', 'All papers'],
-  ['citing', 'Citing'],
-  ['cited', 'Cited by'],
-  ['coauthored', 'Coauthored'],
-];
 const format = (number) => number.toLocaleString();
 
 export default function PaperColumn({
@@ -15,15 +9,19 @@ export default function PaperColumn({
   stats,
   query,
   connectedOnly,
+  filter,
+  onFilter,
 }) {
-  const [filter, setFilter] = useState('all');
   const [limit, setLimit] = useState(25);
+  const authorKey = state.author?.id || state.author?.short_id;
   useEffect(() => {
     setLimit(25);
-  }, [filter, query, connectedOnly, state.author?.id, state.author?.short_id]);
+  }, [filter, query, connectedOnly, authorKey]);
   useEffect(() => {
-    setFilter('all');
-  }, [state.author?.id, state.author?.short_id]);
+    onFilter('all');
+    // Reset only when the author changes, not when the parent re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorKey]);
   const filtered = useMemo(
     () =>
       works.filter(
@@ -39,129 +37,127 @@ export default function PaperColumn({
   );
   const other = label === 'A' ? 'B' : 'A';
   const name = state.author?.display_name || `Author ${label}`;
-  const initials = name
-    .split(' ')
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('');
-  const years = works.map((work) => work.publication_year).filter(Boolean);
+  const filters = [
+    ['all', 'All'],
+    ['citing', `Cites ${other}`],
+    ['cited', `Cited by ${other}`],
+    ['coauthored', 'Coauthored'],
+  ];
+  let lastYear = null;
   return (
     <section
-      className={`paper-column column-${label.toLowerCase()}`}
+      className={`column column-${label.toLowerCase()}`}
       aria-label={`${name} publications`}
     >
-      <div className="author-profile">
-        <div className="avatar">{initials}</div>
-        <div className="author-detail">
-          <span className="eyebrow">AUTHOR {label}</span>
-          <h2>{name}</h2>
-          <p>
-            {state.author?.hint ||
-              (state.loading ? 'Finding author…' : 'Select an author to begin')}
-          </p>
+      <header className="column-head">
+        <h2>
+          <span className="side-dot" aria-hidden="true">
+            {label}
+          </span>
+          {name}
+        </h2>
+        <div className="segments" aria-label={`Filter author ${label} papers`}>
+          {filters.map(([key, text]) => (
+            <button
+              key={key}
+              className={filter === key ? 'selected' : ''}
+              aria-pressed={filter === key}
+              onClick={() => onFilter(key)}
+            >
+              {text}
+              <span>{format(stats[key])}</span>
+            </button>
+          ))}
         </div>
-        {state.author && (
-          <a
-            className="icon-button profile-link"
-            href={`https://openalex.org/${(state.author.id || state.author.short_id).split('/').pop()}`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open ${name} on OpenAlex`}
-          >
-            <Icon name="arrow" />
-          </a>
-        )}
-      </div>
-      <div className="author-meta">
-        <span>
-          <strong>{format(works.length)}</strong> papers
-          {state.loading || state.error ? ' loaded' : ''}
-        </span>
-        <span>
-          {years.length
-            ? `${Math.min(...years)} – ${Math.max(...years)}`
-            : 'Publication history'}
-        </span>
-      </div>
-      <div
-        className="paper-filters"
-        aria-label={`Filter author ${label} papers`}
-      >
-        {filters.map(([key, text]) => (
-          <button
-            key={key}
-            className={filter === key ? 'selected' : ''}
-            aria-pressed={filter === key}
-            onClick={() => setFilter(key)}
-          >
-            {text}
-            {key === 'citing' || key === 'cited' ? ` ${other}` : ''}
-            <span>{format(stats[key])}</span>
-          </button>
-        ))}
-      </div>
+      </header>
       {state.loading && (
-        <div className="loading-progress" role="status">
-          <span className="status-dot pulse" />
-          {state.loaded
-            ? `${format(state.loaded)}${state.total ? ` of ${format(state.total)}` : ''} papers loaded`
-            : 'Loading publications…'}
-          <span>Updating live</span>
+        <div className="progress" role="status">
+          <span className="progress-text">
+            {state.loaded
+              ? `${format(state.loaded)}${state.total ? ` of ${format(state.total)}` : ''} papers loaded`
+              : 'Loading publications…'}
+          </span>
+          <span className="progress-bar" aria-hidden="true">
+            <i
+              style={{
+                width: state.total
+                  ? `${Math.min(100, (state.loaded / state.total) * 100)}%`
+                  : '12%',
+              }}
+            />
+          </span>
         </div>
       )}
       {state.error && (
-        <div className="error-message" role="alert">
-          <p>{state.error}</p>
-          {works.length > 0 && (
-            <p>Showing partial results. Relationship counts are incomplete.</p>
-          )}
-          <button className="text-button" onClick={state.retry}>
+        <div className="error" role="alert">
+          <p>
+            <strong>{state.error}</strong>
+            {works.length > 0 &&
+              ' Showing partial results; relationship counts are incomplete.'}
+          </p>
+          <button className="quiet-button" onClick={state.retry}>
             Try again
           </button>
         </div>
       )}
-      <div className="paper-list">
+      <div className="papers">
         {state.loading && !works.length
-          ? [0, 1, 2, 3].map((value) => (
+          ? [0, 1, 2, 3, 4].map((value) => (
               <div className="paper-skeleton" key={value}>
-                <i />
                 <i />
                 <i />
               </div>
             ))
-          : filtered.slice(0, limit).map((work) => (
-              <article className="paper" key={work.id}>
-                <div className="paper-topline">
-                  <span>{work.publication_year || 'Undated'}</span>
-                  <div className="paper-badges">
-                    {work.coauthored && (
-                      <span className="badge coauthored">Coauthored</span>
-                    )}
-                    {work.citing && (
-                      <span className="badge citing">↗ Citing {other}</span>
-                    )}
-                    {work.cited && (
-                      <span className="badge cited">↙ Cited by {other}</span>
-                    )}
-                  </div>
-                </div>
-                <a
-                  className="paper-title"
-                  href={
-                    /^https?:\/\//i.test(work.url || '') ? work.url : work.id
-                  }
-                  target="_blank"
-                  rel="noreferrer"
+          : filtered.slice(0, limit).map((work) => {
+              const year = work.publication_year || '—';
+              const showYear = year !== lastYear;
+              lastYear = year;
+              return (
+                <article
+                  className={`paper ${showYear ? 'year-start' : ''}`}
+                  key={work.id}
                 >
-                  {work.title}
-                  <Icon name="arrow" width="14" height="14" />
-                </a>
-                <p className="paper-venue">{work.venue}</p>
-              </article>
-            ))}
+                  <span className="paper-year" aria-hidden={!showYear}>
+                    {showYear ? year : ''}
+                  </span>
+                  <div className="paper-body">
+                    <a
+                      className="paper-title"
+                      href={
+                        /^https?:\/\//i.test(work.url || '')
+                          ? work.url
+                          : work.id
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {work.title}
+                    </a>
+                    <p className="paper-meta">
+                      <span className="sr-only">
+                        {work.publication_year || 'Undated'} ·{' '}
+                      </span>
+                      {work.venue}
+                      {work.coauthored && (
+                        <span className="tag tag-both">with {other}</span>
+                      )}
+                      {work.citing && (
+                        <span className={`tag tag-${other.toLowerCase()}`}>
+                          cites {other}
+                        </span>
+                      )}
+                      {work.cited && (
+                        <span className={`tag tag-${other.toLowerCase()}`}>
+                          cited by {other}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
         {!state.loading && !filtered.length && (
-          <div className="empty-state">
-            <Icon name="book" />
+          <div className="empty">
             <h3>
               {works.length ? 'No matching papers' : 'No publications to show'}
             </h3>
@@ -176,20 +172,20 @@ export default function PaperColumn({
         )}
       </div>
       {filtered.length > 0 && (
-        <div className="list-footer">
+        <footer className="column-foot">
           <span>
-            Showing {format(Math.min(limit, filtered.length))} of{' '}
-            {format(filtered.length)} papers
+            {format(Math.min(limit, filtered.length))} of{' '}
+            {format(filtered.length)}
           </span>
           {limit < filtered.length && (
             <button
-              className="text-button"
+              className="quiet-button"
               onClick={() => setLimit((count) => count + 25)}
             >
-              Load 25 more <span aria-hidden="true">↓</span>
+              Load 25 more <Icon name="arrow" width="11" height="11" style={{ transform: 'rotate(135deg)' }} />
             </button>
           )}
-        </div>
+        </footer>
       )}
     </section>
   );
