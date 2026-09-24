@@ -99,6 +99,15 @@ export default function CollaborationNetwork({
     network.once('stabilizationIterationsDone', () =>
       network.setOptions({ physics: false }),
     );
+    // vis-network only fires click for a tap, so dragging a node won't open it.
+    network.on('click', ({ nodes: [id] }) => {
+      const shortId = String(id || '').split('/').pop();
+      if (/^A\d+$/.test(shortId))
+        window.open(`https://openalex.org/${shortId}`, '_blank', 'noopener');
+    });
+    const canvas = container.current;
+    network.on('hoverNode', () => (canvas.style.cursor = 'pointer'));
+    network.on('blurNode', () => (canvas.style.cursor = ''));
     return () => network.destroy();
   }, [authors, collaborators, shared, coauthored, scheme]);
   return (
@@ -108,7 +117,8 @@ export default function CollaborationNetwork({
           <h2>Collaboration network</h2>
           <p>
             Each author’s 15 most frequent coauthors, plus the strongest
-            collaborators they share. Drag nodes to rearrange.
+            collaborators they share. Click a person to open their OpenAlex
+            profile, or drag to rearrange.
           </p>
         </div>
         <div className="chart-legend">
