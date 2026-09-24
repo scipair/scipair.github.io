@@ -23,8 +23,31 @@
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
+/* Dark tokens apply when chosen explicitly, or when following a dark system. */
+:root[data-theme='dark'] {
+  --bg: #131416;
+  --surface: #1a1b1e;
+  --sunken: #0f1012;
+  --ink: #ecebe7;
+  --ink-2: #b1b0ab;
+  --ink-3: #85847f;
+  --rule: #2a2b2f;
+  --rule-strong: #3b3c41;
+  --a: #86a5f2;
+  --a-soft: #86a5f23d;
+  --a-tint: #1e2840;
+  --b: #f0916b;
+  --b-soft: #f0916b3d;
+  --b-tint: #3a241b;
+  --both: #b692e4;
+  --both-tint: #2c2440;
+  --ok: #6cc08b;
+  --warn: #e0a84e;
+  --danger: #f2877f;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #131416;
     --surface: #1a1b1e;
     --sunken: #0f1012;
