@@ -1,102 +1,41 @@
 # SciPair
 
-A powerful tool for exploring academic relationships between authors using data from OpenAlex. Compare authors, visualize citations, collaborations, and analyze publication trends over time.
+Compare two researchers side by side: who cites whom, what they wrote together, and which collaborators they share. Publication data comes from [OpenAlex](https://openalex.org).
 
-🌐 **Live Demo**: [https://scipair.github.io](https://scipair.github.io)
+**[scipair.github.io](https://scipair.github.io)**
 
-**Created by:**
-- [Danishjeet Singh](https://singhdan.me)
-- [Filipi N. Silva](https://filipinascimento.github.io)
+![SciPair comparing Filippo Menczer and Santo Fortunato](docs/screenshot.png)
 
-## ✨ Features
+## What you get
 
-### 📊 Author Comparison
-- **Smart Search**: Autocomplete functionality for finding authors
-- **Side-by-Side Comparison**: Compare two authors with their complete publication records
-- **Citation Analysis**: Visualize citing relationships between authors' works
-- **Coauthorship Detection**: Highlight collaborative papers
+- Citation counts in each direction between the two authors, plus the papers they coauthored. Click a number to list those papers.
+- A mirrored timeline of both publication records, with linked and joint papers highlighted.
+- Both paper lists, filterable by relationship, title, venue or year.
+- Yearly trends and a collaboration network showing shared coauthors.
 
-### 🎯 Interactive Filtering
-- **Dynamic Filter Buttons**: Click to focus on specific relationship types
-- **Citing A/B**: Papers where one author cites the other
-- **Cited by A/B**: Papers where one author is cited by the other  
-- **Coauthored**: Papers written together
-- **All Papers**: Complete publication list
+The URL ends with both OpenAlex author IDs (`#A…;A…`), so you can share a comparison by copying the link.
 
-### 📈 Temporal Analytics
-- **Publication Trends**: Line charts showing publication counts over time
-- **Collaboration Timeline**: Bar charts displaying citations and collaborations by year
-- **Color-blind Friendly**: Accessible pastel color scheme
+## Things to know
 
-### 🕸️ Network Visualization
-- **Collaboration Networks**: Interactive visualization of author relationships
-- **Shared Collaborators**: Identify mutual connections between authors
-- **Dynamic Sizing**: Node and edge sizes reflect collaboration strength
-- **Interactive**: Drag, zoom, and hover for detailed exploration
+- OpenAlex sometimes lists a preprint and its published version as separate works, so the same paper can appear more than once.
+- Authors with a large number of papers take a few seconds to load. Lists and counts update while loading.
+- No API key is needed. If you hit the anonymous rate limit, add a free OpenAlex key under **API key**. The key is kept for the browser session only.
 
-## 🎨 Visual Indicators
+## Development
 
-- **🔵 Blue (↑)**: Papers where Author A cites Author B
-- **🟠 Orange (↓)**: Papers where Author A is cited by Author B  
-- **🟣 Purple (○)**: Papers coauthored by both authors
-- **🟪 Purple Nodes**: Shared collaborators in network view
-
-## 🚀 Technology Stack
-
-- **React** - Modern frontend framework
-- **Chart.js** - Interactive data visualizations
-- **vis-network** - Network graph visualization
-- **Axios** - HTTP client for API requests
-- **Bulma CSS** - Responsive CSS framework
-- **OpenAlex API** - Comprehensive academic database
-
-## 💻 Development
-
-### Prerequisites
-- Node.js (v14 or later)
-- npm or yarn
-
-### Local Setup
 ```bash
-# Clone the repository
-git clone https://github.com/scipair/scipair.github.io.git
-cd scipair.github.io
-
-# Install dependencies
 npm install
-
-# Start development server
 npm start
 ```
 
-The app will open at `http://localhost:3000`.
+`npm test` runs the tests and `npm run build` makes a production build. Pushes to `main` deploy to GitHub Pages.
 
-### Production Build
-```bash
-npm run build
-```
+Bug reports and pull requests are welcome in [Issues](https://github.com/scipair/scipair/issues).
 
-## 📖 Usage Guide
+## Authors
 
-1. **Search Authors**: Type author names in the search fields
-2. **Select from Autocomplete**: Choose authors from the dropdown suggestions
-3. **Explore Relationships**: Wait for data to load and view highlighted connections
-4. **Use Filter Buttons**: Click buttons to focus on specific relationship types
-5. **Analyze Trends**: Switch to Analytics tab for temporal insights
-6. **Explore Networks**: View Network tab for collaboration visualization
-7. **Access Papers**: Click any paper title to view the full publication
+[Danishjeet Singh](https://singhdan.me) and [Filipi N. Silva](https://filipinascimento.github.io).
 
-## 🔌 API
+## License
 
-Powered by the [OpenAlex API](https://openalex.org/), a free database of scholarly works. Anonymous requests continue to work for casual use; an optional OpenAlex API key increases the daily budget and can be passed to the client methods as `apiKey`. The client uses field selection, cursor paging, abortable requests, bounded retry backoff, and short-lived memory/session caching for completed author-work results.
-
-## 🤝 Contributing
-
-We welcome contributions! Feel free to:
-- Report bugs or request features via [GitHub Issues](https://github.com/scipair/scipair.github.io/issues)
-- Submit pull requests for improvements
-- Share feedback and suggestions
-
-## 📄 License
-
-This project is open source. 
+[Apache 2.0](LICENSE). You can use, modify and redistribute SciPair, provided you keep the copyright and [NOTICE](NOTICE) file and mark files you changed. The license does not grant use of the SciPair name for your own version.

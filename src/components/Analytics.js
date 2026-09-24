@@ -11,6 +11,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
+import { readTokens, useColorScheme } from '../lib/theme';
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -21,28 +22,62 @@ ChartJS.register(
   Legend,
   Filler,
 );
-const colors = ['#246b59', '#bd703c', '#8070ad'];
-const options = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  plugins: {
-    legend: {
-      position: 'bottom',
-      labels: { usePointStyle: true, boxWidth: 7, padding: 22 },
+function chartOptions(t) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    font: { family: t.sans },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: t.surface,
+        titleColor: t.ink,
+        bodyColor: t.ink2,
+        borderColor: t.ruleStrong,
+        borderWidth: 1,
+        padding: 10,
+        boxPadding: 4,
+        usePointStyle: true,
+        titleFont: { family: t.sans, weight: '600' },
+        bodyFont: { family: t.sans },
+      },
     },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-    y: {
-      beginAtZero: true,
-      ticks: { precision: 0 },
-      grid: { color: '#edf0eb' },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { color: t.ruleStrong },
+        ticks: { maxTicksLimit: 10, color: t.ink3, font: { family: t.sans, size: 11 } },
+      },
+      y: {
+        beginAtZero: true,
+        border: { display: false },
+        ticks: { precision: 0, color: t.ink3, font: { family: t.sans, size: 11 } },
+        grid: { color: t.rule },
+      },
     },
-  },
-};
+  };
+}
 export default function Analytics({ works, authors }) {
+  const scheme = useColorScheme();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tokens = useMemo(readTokens, [scheme]);
+  const options = useMemo(() => chartOptions(tokens), [tokens]);
+  const stacked = useMemo(
+    () => ({
+      ...options,
+      scales: {
+        x: { ...options.scales.x, stacked: true },
+        y: { ...options.scales.y, stacked: true },
+      },
+    }),
+    [options],
+  );
   const data = useMemo(() => {
+    const colors = [tokens.a, tokens.b, tokens.both];
+    const name = (index) =>
+      authors[index]?.display_name || `Author ${index ? 'B' : 'A'}`;
     const years = [
       ...new Set(
         works
@@ -66,10 +101,14 @@ export default function Analytics({ works, authors }) {
       label,
       data: values,
       borderColor: colors[index],
-      backgroundColor: `${colors[index]}b0`,
-      borderWidth: 2,
-      pointRadius: 2,
-      tension: 0.25,
+      backgroundColor: colors[index],
+      borderWidth: 1.75,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      tension: 0.2,
+      borderRadius: 1,
+      categoryPercentage: 0.9,
+      barPercentage: 0.85,
     });
     return {
       trends: {
@@ -77,7 +116,7 @@ export default function Analytics({ works, authors }) {
         datasets: [
           ...works.map((list, index) =>
             dataset(
-              authors[index]?.display_name || `Author ${index ? 'B' : 'A'}`,
+              name(index),
               count(list),
               index,
             ),
@@ -93,39 +132,49 @@ export default function Analytics({ works, authors }) {
         labels: years,
         datasets: [
           dataset(
-            'A papers citing B',
+            `${name(0)} citing ${name(1)}`,
             count(works[0], (work) => work.citing),
             0,
           ),
           dataset(
-            'B papers citing A',
+            `${name(1)} citing ${name(0)}`,
             count(works[1], (work) => work.citing),
             1,
           ),
           dataset(
-            'Coauthored papers',
+            'Coauthored',
             count(works[0], (work) => work.coauthored),
             2,
           ),
         ],
       },
     };
-  }, [works, authors]);
+  }, [works, authors, tokens]);
   if (!data.trends.labels.length)
     return (
-      <div className="empty-state panel">
-        <h2>A timeline of research</h2>
-        <p>Publication trends will appear as author records load.</p>
+      <div className="empty">
+        <h3>No publication years yet</h3>
+        <p>Trends appear as author records load.</p>
       </div>
     );
+  const legend = (sets) => (
+    <div className="chart-legend" aria-hidden="true">
+      {sets.map((set) => (
+        <span key={set.label}>
+          <i style={{ background: set.borderColor }} />
+          {set.label}
+        </span>
+      ))}
+    </div>
+  );
   return (
-    <div className="analytics-grid">
-      <section className="panel">
-        <span className="eyebrow">RESEARCH ACTIVITY</span>
-        <h2>Publications over time</h2>
-        <p>
-          Follow each author’s output and the years they published together.
-        </p>
+    <div className="trends">
+      <section className="chart-block">
+        <header>
+          <h2>Papers per year</h2>
+          <p>Each author’s output, and the papers they wrote together.</p>
+        </header>
+        {legend(data.trends.datasets)}
         <div className="chart-wrap">
           <Line
             data={data.trends}
@@ -135,21 +184,23 @@ export default function Analytics({ works, authors }) {
           />
         </div>
       </section>
-      <section className="panel">
-        <span className="eyebrow">ACADEMIC EXCHANGE</span>
-        <h2>A history of connection</h2>
-        <p>Papers citing the other author, alongside joint publications.</p>
+      <section className="chart-block">
+        <header>
+          <h2>Citations between them, by year</h2>
+          <p>Papers from each author that cite the other’s work.</p>
+        </header>
+        {legend(data.timeline.datasets)}
         <div className="chart-wrap">
           <Bar
             data={data.timeline}
-            options={options}
+            options={stacked}
             role="img"
             aria-label="Citing and coauthored papers by publication year"
           />
         </div>
       </section>
       <details className="chart-data">
-        <summary>View yearly publication counts</summary>
+        <summary>Yearly counts as a table</summary>
         <div className="table-scroll">
           <table>
             <thead>

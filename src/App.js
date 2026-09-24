@@ -3,6 +3,7 @@ import './App.css';
 import Icon from './components/Icon';
 import AuthorSearch from './components/AuthorSearch';
 import PaperColumn from './components/PaperColumn';
+import Timeline from './components/Timeline';
 import useAuthor from './hooks/useAuthor';
 import { compareWorks, sharedCollaborators } from './lib/compare';
 const Analytics = lazy(() => import('./components/Analytics'));
@@ -11,18 +12,61 @@ const CollaborationNetwork = lazy(
 );
 const defaultAuthors = ['Filippo Menczer', 'Santo Fortunato'];
 const tabs = [
-  ['comparison', 'compare', 'Comparison'],
-  ['analytics', 'chart', 'Analytics'],
-  ['network', 'network', 'Network'],
+  ['comparison', 'Papers'],
+  ['analytics', 'Trends'],
+  ['network', 'Network'],
 ];
 const shortId = (author) =>
   (author?.id || author?.short_id || '').split('/').pop();
+const format = (number) => number.toLocaleString();
 function readKey() {
   try {
     return sessionStorage.getItem('scipair-api-key') || '';
   } catch {
     return '';
   }
+}
+
+function AuthorHead({ side, state, works, apiKey }) {
+  const years = works.map((work) => work.publication_year).filter(Boolean);
+  const id = shortId(state.author);
+  return (
+    <div className={`author-head side-${side.toLowerCase()}`}>
+      <AuthorSearch
+        label={side}
+        author={state.author}
+        apiKey={apiKey}
+        onSelect={state.load}
+      />
+      <p className="author-affil">
+        {state.author?.hint ||
+          (state.loading ? 'Finding author…' : 'Search for an author')}
+      </p>
+      <p className="author-facts">
+        <span>
+          <b>{format(works.length)}</b>{' '}
+          {state.loading && state.total
+            ? `of ${format(state.total)} papers`
+            : 'papers'}
+        </span>
+        {years.length > 0 && (
+          <span>
+            {Math.min(...years)}–{Math.max(...years)}
+          </span>
+        )}
+        {id && (
+          <a
+            href={`https://openalex.org/${id}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${state.author.display_name} on OpenAlex`}
+          >
+            OpenAlex <Icon name="arrow" width="11" height="11" />
+          </a>
+        )}
+      </p>
+    </div>
+  );
 }
 
 export default function App() {
@@ -32,6 +76,7 @@ export default function App() {
   const [tab, setTab] = useState('comparison');
   const [query, setQuery] = useState('');
   const [connectedOnly, setConnectedOnly] = useState(false);
+  const [filters, setFilters] = useState(['all', 'all']);
   const [shareStatus, setShareStatus] = useState('');
   const first = useAuthor(apiKey);
   const second = useAuthor(apiKey);
@@ -61,6 +106,11 @@ export default function App() {
         `${window.location.pathname}${window.location.search}#${a};${b}`,
       );
   }, [first.author, second.author]);
+  useEffect(() => {
+    if (!shareStatus) return;
+    const timer = setTimeout(() => setShareStatus(''), 2400);
+    return () => clearTimeout(timer);
+  }, [shareStatus]);
   const comparison = useMemo(
     () => compareWorks(first.works, second.works),
     [first.works, second.works],
@@ -75,6 +125,22 @@ export default function App() {
   );
   const loading = first.loading || second.loading;
   const incomplete = loading || first.error || second.error;
+  const names = [first, second].map(
+    (state, index) => state.author?.display_name || `Author ${'AB'[index]}`,
+  );
+  const setFilter = (index, value) =>
+    setFilters((current) =>
+      current.map((item, i) => (i === index ? value : item)),
+    );
+  const focus = (next) => {
+    setFilters(next);
+    setConnectedOnly(false);
+    setQuery('');
+    setTab('comparison');
+    document
+      .getElementById('workspace')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const share = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -83,251 +149,232 @@ export default function App() {
       setShareStatus('Copy the URL from your address bar');
     }
   };
+  const flows = [
+    {
+      key: 'ab',
+      value: comparison.stats[0].citing,
+      text: (
+        <>
+          papers by <em className="ink-a">A</em> cite{' '}
+          <em className="ink-b">B</em>
+        </>
+      ),
+      filters: ['citing', 'all'],
+    },
+    {
+      key: 'ba',
+      value: comparison.stats[1].citing,
+      text: (
+        <>
+          papers by <em className="ink-b">B</em> cite{' '}
+          <em className="ink-a">A</em>
+        </>
+      ),
+      filters: ['all', 'citing'],
+    },
+    {
+      key: 'both',
+      value: comparison.stats[0].coauthored,
+      text: 'papers written together',
+      filters: ['coauthored', 'coauthored'],
+    },
+  ];
   return (
-    <div className="app-shell">
-      <header className="site-header">
-        <div className="header-inner">
-          <a
-            href={window.location.pathname}
-            className="brand"
-            aria-label="SciPair home"
+    <div className="app">
+      <header className="topbar">
+        <a href={window.location.pathname} className="wordmark">
+          <span className="wordmark-glyph" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+          SciPair
+        </a>
+        <span className="topbar-note">
+          How two researchers’ work connects, from OpenAlex records
+        </span>
+        <nav className="topbar-actions">
+          <button
+            className="quiet-button"
+            aria-expanded={settings}
+            onClick={() => setSettings((value) => !value)}
           >
-            <span className="brand-mark">
-              <i />
-              <i />
-              <i />
-            </span>
-            SciPair
-            <span className="brand-divider" />
-            <span className="brand-tagline">RESEARCH, CONNECTED</span>
+            {apiKey ? 'API key set' : 'API key'}
+          </button>
+          <a
+            className="quiet-button"
+            href="https://github.com/scipair/scipair"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Source <Icon name="arrow" width="11" height="11" />
           </a>
-          <div className="header-actions">
+        </nav>
+      </header>
+      {settings && (
+        <form
+          className="settings"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = keyDraft.trim();
+            setApiKey(value);
+            try {
+              if (value) sessionStorage.setItem('scipair-api-key', value);
+              else sessionStorage.removeItem('scipair-api-key');
+            } catch {}
+            setSettings(false);
+          }}
+        >
+          <label htmlFor="api-key">OpenAlex API key</label>
+          <input
+            id="api-key"
+            type="password"
+            autoComplete="off"
+            placeholder="Optional — raises the daily request limit"
+            value={keyDraft}
+            onChange={(event) => setKeyDraft(event.target.value)}
+          />
+          <button className="solid-button" type="submit">
+            Save
+          </button>
+          <p>
+            Kept for this browser session only.{' '}
             <a
-              href="https://github.com/scipair/scipair"
+              href="https://openalex.org/settings/api"
               target="_blank"
               rel="noreferrer"
             >
-              About the project <Icon name="arrow" width="14" height="14" />
+              Get a free key
             </a>
-            <button
-              className="icon-button"
-              aria-label="OpenAlex settings"
-              aria-expanded={settings}
-              onClick={() => setSettings((value) => !value)}
-            >
-              <Icon name="settings" />
-            </button>
-          </div>
-        </div>
-      </header>
-      <main>
-        <div className="page-intro">
-          <div>
-            <div className="eyebrow">
-              <span className="tiny-rule" /> THE SCIENCE OF CONNECTION
-            </div>
-            <h1>
-              Discover the work
-              <br className="mobile-break" /> between researchers.
-            </h1>
-            <p>
-              Explore the papers, citations, and collaborations that connect two
-              authors.
-            </p>
-          </div>
-          <div className="source-label">
-            <span className="status-dot" /> Powered by OpenAlex
-          </div>
-        </div>
-        {settings && (
-          <form
-            className="settings-panel"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const value = keyDraft.trim();
-              setApiKey(value);
-              try {
-                if (value) sessionStorage.setItem('scipair-api-key', value);
-                else sessionStorage.removeItem('scipair-api-key');
-              } catch {}
-              setSettings(false);
-            }}
-          >
-            <div>
-              <label htmlFor="api-key">OpenAlex API key</label>
-              <p>
-                Use your key if OpenAlex requests authentication or a higher
-                quota. Stored only for this browser session.{' '}
-                <a
-                  href="https://openalex.org/settings/api"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Get a free key ↗
-                </a>
-              </p>
-            </div>
-            <input
-              id="api-key"
-              type="password"
-              autoComplete="off"
-              placeholder="Paste your API key"
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-            />
-            <button className="primary-button" type="submit">
-              Save & reload
-            </button>
-          </form>
-        )}
-        <section className="pair-builder" aria-label="Choose authors">
-          <AuthorSearch
-            label="A"
-            author={first.author}
-            apiKey={apiKey}
-            onSelect={first.load}
-          />
-          <div className="pair-connector" aria-hidden="true">
-            <Icon name="link" />
-          </div>
-          <AuthorSearch
-            label="B"
-            author={second.author}
-            apiKey={apiKey}
-            onSelect={second.load}
-          />
-          <div className="pair-action">
-            <span>
-              Two perspectives.
-              <br />
-              One bigger picture.
-            </span>
-            <button
-              className="share-button"
-              disabled={!first.author || !second.author}
-              onClick={share}
-            >
-              <Icon name="link" width="16" height="16" /> Share comparison
-            </button>
-            <span className="sr-only" role="status">
-              {shareStatus}
-            </span>
-          </div>
-        </section>
-        {shareStatus && (
-          <p className="share-feedback" role="status">
-            {shareStatus}
           </p>
-        )}
-        <section className="overview" aria-label="Comparison overview">
-          {[
-            [
-              'book',
-              comparison.unique,
-              'Unique publications',
-              'Across both authors',
-            ],
-            [
-              'link',
-              comparison.citations,
-              'Citation connections',
-              'Direct references between papers',
-            ],
-            [
-              'compare',
-              comparison.stats[0].coauthored,
-              'Coauthored papers',
-              'Research published together',
-            ],
-            [
-              'network',
-              shared.length,
-              'Shared collaborators',
-              'Researchers in both networks',
-            ],
-          ].map(([icon, value, label, detail]) => (
-            <div className="metric" key={label}>
-              <div className="metric-label">
-                <span>{label}</span>
-                <Icon name={icon} />
-              </div>
-              <strong>
-                {value.toLocaleString()}
-                {incomplete && (
-                  <span
-                    className="metric-pending"
-                    title="Results are incomplete"
-                  >
-                    *
-                  </span>
-                )}
-              </strong>
-              <small>{detail}</small>
-            </div>
-          ))}
+        </form>
+      )}
+      <main>
+        <section className="pair" aria-label="Choose authors">
+          <AuthorHead
+            side="A"
+            state={first}
+            works={comparison.works[0]}
+            apiKey={apiKey}
+          />
+          <div
+            className={`exchange ${incomplete ? 'provisional' : ''}`}
+            aria-label="How the two authors connect"
+          >
+            {flows.map((flow) => (
+              <button
+                key={flow.key}
+                className={`flow flow-${flow.key}`}
+                disabled={!flow.value}
+                onClick={() => focus(flow.filters)}
+                title={flow.value ? 'Show these papers' : undefined}
+              >
+                <span className="flow-value">{format(flow.value)}</span>
+                <span className="flow-line" aria-hidden="true" />
+                <span className="flow-text">{flow.text}</span>
+              </button>
+            ))}
+          </div>
+          <AuthorHead
+            side="B"
+            state={second}
+            works={comparison.works[1]}
+            apiKey={apiKey}
+          />
         </section>
-        <div className="workspace-heading">
-          <nav className="view-tabs" aria-label="Explore comparison">
-            {tabs.map(([id, icon, title]) => (
+        <Timeline works={comparison.works} names={names} />
+        <p className={`ledger ${incomplete ? 'provisional' : ''}`}>
+          <span>
+            <b>{format(comparison.unique)}</b> distinct papers
+          </span>
+          <span>
+            <b>{format(comparison.citations)}</b> references between them
+          </span>
+          <span>
+            <b>{format(shared.length)}</b> shared collaborators
+          </span>
+          {incomplete && <span className="muted">counts still loading</span>}
+        </p>
+        <div className="viewbar" id="workspace">
+          <nav className="tabs" aria-label="Explore comparison">
+            {tabs.map(([id, title]) => (
               <button
                 key={id}
                 className={tab === id ? 'active' : ''}
                 aria-current={tab === id ? 'page' : undefined}
                 onClick={() => setTab(id)}
               >
-                <Icon name={icon} width="17" height="17" />
                 {title}
               </button>
             ))}
           </nav>
           <span className="data-status" role="status">
-            <span className={`status-dot ${loading ? 'pulse' : ''}`} />
+            <span
+              className={`dot ${loading ? 'dot-live' : incomplete ? 'dot-warn' : ''}`}
+            />
             {loading
               ? 'Loading papers · results update live'
               : incomplete
                 ? 'Partial data · retry to complete'
                 : 'Comparison up to date'}
           </span>
+          <button
+            className="quiet-button"
+            disabled={!first.author || !second.author}
+            onClick={share}
+          >
+            <Icon name="link" width="14" height="14" />
+            {shareStatus || 'Copy link'}
+          </button>
+          <span className="sr-only" role="status">
+            {shareStatus}
+          </span>
         </div>
         {tab === 'comparison' ? (
           <>
-            <div className="comparison-toolbar">
-              <div className="publication-search">
-                <Icon name="search" width="17" height="17" />
+            <div className="toolbar">
+              <label className="find">
+                <Icon name="search" width="15" height="15" />
                 <input
                   aria-label="Search publications"
-                  placeholder="Find a publication, venue, or year…"
+                  placeholder="Filter both lists by title, venue or year"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
-              </div>
-              <label className="toggle-label">
+                {query && (
+                  <button
+                    type="button"
+                    className="find-clear"
+                    aria-label="Clear search"
+                    onClick={() => setQuery('')}
+                  >
+                    ×
+                  </button>
+                )}
+              </label>
+              <label className="check">
                 <input
                   type="checkbox"
                   checked={connectedOnly}
                   onChange={(event) => setConnectedOnly(event.target.checked)}
                 />
-                <span className="toggle-track" />
+                <span className="check-box" aria-hidden="true" />
                 Connected papers only
               </label>
             </div>
-            <div className="paper-columns">
-              <PaperColumn
-                label="A"
-                state={first}
-                works={comparison.works[0]}
-                stats={comparison.stats[0]}
-                query={query}
-                connectedOnly={connectedOnly}
-              />
-              <PaperColumn
-                label="B"
-                state={second}
-                works={comparison.works[1]}
-                stats={comparison.stats[1]}
-                query={query}
-                connectedOnly={connectedOnly}
-              />
+            <div className="columns">
+              {[first, second].map((state, index) => (
+                <PaperColumn
+                  key={'AB'[index]}
+                  label={'AB'[index]}
+                  state={state}
+                  works={comparison.works[index]}
+                  stats={comparison.stats[index]}
+                  query={query}
+                  connectedOnly={connectedOnly}
+                  filter={filters[index]}
+                  onFilter={(value) => setFilter(index, value)}
+                />
+              ))}
             </div>
           </>
         ) : (
@@ -353,29 +400,22 @@ export default function App() {
             )}
           </Suspense>
         )}
-        <div className="data-note">
-          <span className="info-symbol">i</span>
-          <p>
-            {incomplete && (
-              <strong>Counts are provisional while data is incomplete. </strong>
-            )}
-            Publication records come from OpenAlex and may include multiple
-            versions of a work. Relationship filters count papers; citation
-            connections count references.
-          </p>
-        </div>
+        <p className="note">
+          {incomplete && (
+            <strong>Counts are provisional while data is incomplete. </strong>
+          )}
+          OpenAlex may list several versions of the same work. Filters count
+          papers; “references between them” counts individual citations, so a
+          paper citing three of the other author’s works counts three times.
+        </p>
       </main>
-      <footer>
-        <a className="footer-brand" href={window.location.pathname}>
-          SciPair
-        </a>
-        <span>Made for a more connected understanding of science.</span>
-        <p>
-          By{' '}
+      <footer className="footer">
+        <span>
+          SciPair · by{' '}
           <a href="https://singhdan.me" target="_blank" rel="noreferrer">
             Danishjeet Singh
           </a>{' '}
-          &{' '}
+          and{' '}
           <a
             href="https://filipinascimento.github.io"
             target="_blank"
@@ -383,7 +423,13 @@ export default function App() {
           >
             Filipi N. Silva
           </a>
-        </p>
+        </span>
+        <span>
+          Data from{' '}
+          <a href="https://openalex.org" target="_blank" rel="noreferrer">
+            OpenAlex
+          </a>
+        </span>
       </footer>
     </div>
   );

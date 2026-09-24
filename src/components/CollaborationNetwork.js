@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Network } from 'vis-network';
-const palette = ['#246b59', '#bd703c'];
+import { readTokens, useColorScheme } from '../lib/theme';
 export default function CollaborationNetwork({
   authors,
   collaborators,
@@ -8,8 +8,12 @@ export default function CollaborationNetwork({
   coauthored,
 }) {
   const container = useRef(null);
+  const scheme = useColorScheme();
   useEffect(() => {
     if (!container.current || !authors.every(Boolean)) return;
+    const t = readTokens();
+    const palette = [t.a, t.b];
+    const font = t.sans.split(',')[0].replace(/'/g, '');
     const authorIds = authors.map(
       (author) =>
         author.id || `https://openalex.org/${author.short_id.split('/').pop()}`,
@@ -22,8 +26,8 @@ export default function CollaborationNetwork({
         id: authorIds[index],
         label: author.display_name,
         color: palette[index],
-        size: 26,
-        font: { size: 15, color: '#233c33' },
+        size: 22,
+        font: { size: 15, color: t.ink, face: font, strokeWidth: 4, strokeColor: t.surface },
       }),
     );
     // Limit physics/layout work while retaining the strongest shared connections.
@@ -43,18 +47,20 @@ export default function CollaborationNetwork({
         nodes.set(author.id, {
           id: author.id,
           label: author.name,
+          borderWidth: sharedIds.has(author.id) ? 0 : 1,
           color: sharedIds.has(author.id)
-            ? '#a895c1'
-            : index === 0
-              ? '#a8c9ba'
-              : '#e3bc9d',
-          size: Math.min(21, 8 + Math.sqrt(author.publication_count) * 2),
+            ? { background: t.both, border: t.both }
+            : {
+                background: index === 0 ? t.aTint : t.bTint,
+                border: palette[index],
+              },
+          size: Math.min(16, 5 + Math.sqrt(author.publication_count) * 1.6),
         });
         edges.push({
           from: authorIds[index],
           to: author.id,
-          width: Math.min(5, 1 + Math.sqrt(author.publication_count) / 2),
-          color: '#cdd8d0',
+          width: Math.min(4, 0.75 + Math.sqrt(author.publication_count) / 2.5),
+          color: { color: t.ruleStrong, opacity: 0.9 },
         });
       }),
     );
@@ -62,8 +68,8 @@ export default function CollaborationNetwork({
       edges.push({
         from: authorIds[0],
         to: authorIds[1],
-        width: 4,
-        color: '#a895c1',
+        width: 3,
+        color: t.both,
         label: `${coauthored} shared papers`,
       });
     const network = new Network(
@@ -73,9 +79,12 @@ export default function CollaborationNetwork({
         nodes: {
           shape: 'dot',
           borderWidth: 0,
-          font: { face: 'system-ui', size: 12, color: '#4e5a53' },
+          font: { face: font, size: 11, color: t.ink2, strokeWidth: 3, strokeColor: t.surface },
         },
-        edges: { smooth: false, font: { size: 11, color: '#657269' } },
+        edges: {
+          smooth: false,
+          font: { face: font, size: 11, color: t.both, strokeWidth: 4, strokeColor: t.surface },
+        },
         physics: {
           stabilization: { iterations: 100 },
           barnesHut: { gravitationalConstant: -4500, springLength: 160 },
@@ -91,33 +100,32 @@ export default function CollaborationNetwork({
       network.setOptions({ physics: false }),
     );
     return () => network.destroy();
-  }, [authors, collaborators, shared, coauthored]);
+  }, [authors, collaborators, shared, coauthored, scheme]);
   return (
-    <section className="panel network-panel">
-      <div className="network-heading">
+    <section className="network">
+      <header className="network-head">
         <div>
-          <span className="eyebrow">THE WIDER RESEARCH COMMUNITY</span>
           <h2>Collaboration network</h2>
           <p>
-            Explore the strongest collaborators and the people connecting both
-            authors. Drag to explore.
+            Each author’s 15 most frequent coauthors, plus the strongest
+            collaborators they share. Drag nodes to rearrange.
           </p>
         </div>
-        <div className="network-legend">
+        <div className="chart-legend">
           <span>
-            <i style={{ background: palette[0] }} />
-            Author A
+            <i className="bg-a" />
+            {authors[0]?.display_name || 'Author A'}’s coauthors
           </span>
           <span>
-            <i style={{ background: palette[1] }} />
-            Author B
+            <i className="bg-b" />
+            {authors[1]?.display_name || 'Author B'}’s coauthors
           </span>
           <span>
-            <i style={{ background: '#a895c1' }} />
+            <i className="bg-both" />
             Shared
           </span>
         </div>
-      </div>
+      </header>
       {authors.every(Boolean) ? (
         <div
           ref={container}
@@ -127,30 +135,29 @@ export default function CollaborationNetwork({
           aria-label="Interactive collaboration network. Use arrow keys to move and plus or minus to zoom."
         />
       ) : (
-        <div className="empty-state">
-          Select two authors to see their collaborators.
+        <div className="empty">
+          <p>Select two authors to see their collaborators.</p>
         </div>
       )}
-      <div className="shared-list">
+      <div className="shared">
         <h3>
           Shared collaborators <span>{shared.length}</span>
         </h3>
         {shared.length ? (
-          <div>
+          <ol>
             {shared.slice(0, 12).map((person) => (
-              <a
-                href={person.id}
-                target="_blank"
-                rel="noreferrer"
-                key={person.id}
-              >
-                {person.name}
-                <span>{person.total} collaborations</span>
-              </a>
+              <li key={person.id}>
+                <a href={person.id} target="_blank" rel="noreferrer">
+                  {person.name}
+                </a>
+                <span>{person.total} joint papers</span>
+              </li>
             ))}
-          </div>
+          </ol>
         ) : (
-          <p>No shared collaborators in the records loaded so far.</p>
+          <p className="muted">
+            No shared collaborators in the records loaded so far.
+          </p>
         )}
       </div>
     </section>

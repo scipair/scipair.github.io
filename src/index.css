@@ -1,21 +1,69 @@
+:root {
+  --bg: #f8f7f4;
+  --surface: #ffffff;
+  --sunken: #f1efea;
+  --ink: #16181b;
+  --ink-2: #4b5058;
+  --ink-3: #7d828a;
+  --rule: #e4e1da;
+  --rule-strong: #cdc9c0;
+  --a: #2856c1;
+  --a-soft: #2856c133;
+  --a-tint: #e6ecf9;
+  --b: #c24e26;
+  --b-soft: #c24e2633;
+  --b-tint: #f8e8e0;
+  --both: #7a4bb0;
+  --both-tint: #efe7f7;
+  --ok: #3c8a5a;
+  --warn: #b7791f;
+  --danger: #b3261e;
+  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131416;
+    --surface: #1a1b1e;
+    --sunken: #0f1012;
+    --ink: #ecebe7;
+    --ink-2: #b1b0ab;
+    --ink-3: #85847f;
+    --rule: #2a2b2f;
+    --rule-strong: #3b3c41;
+    --a: #86a5f2;
+    --a-soft: #86a5f23d;
+    --a-tint: #1e2840;
+    --b: #f0916b;
+    --b-soft: #f0916b3d;
+    --b-tint: #3a241b;
+    --both: #b692e4;
+    --both-tint: #2c2440;
+    --ok: #6cc08b;
+    --warn: #e0a84e;
+    --danger: #f2877f;
+    color-scheme: dark;
+  }
+}
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  color: #263c32;
-  background: #f7f8f4;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 0;
 }
 button,
 input {
   font: inherit;
-}
-button,
-a,
-input {
-  -webkit-tap-highlight-color: transparent;
+  color: inherit;
 }
 button {
   cursor: pointer;
@@ -25,16 +73,13 @@ a {
 }
 button:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.45;
 }
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-summary:focus-visible,
-[tabindex]:focus-visible {
-  outline: 3px solid #b88342;
-  outline-offset: 4px;
+:focus-visible {
+  outline: 2px solid var(--a);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 ::selection {
-  background: #d5e8dc;
+  background: var(--a-tint);
 }

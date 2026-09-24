@@ -52,19 +52,22 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
     <div
       className="author-search"
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          setQuery(author?.display_name || '');
+        }
       }}
     >
-      <label className="field-label" htmlFor={`search-${label}`}>
+      <label className="side-tag" htmlFor={`search-${label}`}>
         Author {label}
       </label>
-      <div className="search-input">
-        <Icon name="search" />
+      <div className="name-field">
         <input
           ref={input}
           id={`search-${label}`}
           role="combobox"
           autoComplete="off"
+          spellCheck="false"
           placeholder="Search an author…"
           value={query}
           aria-expanded={open && results.length > 0}
@@ -73,7 +76,10 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
           aria-activedescendant={
             active >= 0 ? `${listId}-${active}` : undefined
           }
-          onFocus={() => setOpen(true)}
+          onFocus={(event) => {
+            setOpen(true);
+            event.target.select();
+          }}
           onChange={(event) => {
             setQuery(event.target.value);
             setOpen(true);
@@ -81,6 +87,8 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               setOpen(false);
+              setQuery(author?.display_name || '');
+              event.target.blur();
               return;
             }
             if (!results.length || !open) return;
@@ -100,9 +108,7 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
             }
           }}
         />
-        <span className={`author-letter letter-${label.toLowerCase()}`}>
-          {label}
-        </span>
+        <Icon name="search" width="16" height="16" className="name-field-icon" />
       </div>
       {open && (results.length > 0 || status) && (
         <div className="search-popover">
@@ -120,6 +126,9 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
               >
                 <strong>{item.display_name}</strong>
                 <span>{item.hint || 'Institution unavailable'}</span>
+                {item.works_count > 0 && (
+                  <small>{item.works_count.toLocaleString()} works</small>
+                )}
               </li>
             ))}
           </ul>
