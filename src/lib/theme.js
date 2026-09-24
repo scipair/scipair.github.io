@@ -5,8 +5,8 @@ const DARK_QUERY = '(prefers-color-scheme: dark)';
 const CHANGE_EVENT = 'scipair-theme-change';
 
 // Charts and the network draw on canvas, so they read the CSS tokens directly.
-export function readTokens() {
-  const style = getComputedStyle(document.documentElement);
+export function readTokens(element = document.documentElement) {
+  const style = getComputedStyle(element);
   const get = (name) => style.getPropertyValue(`--${name}`).trim();
   return {
     a: get('a'),
@@ -21,6 +21,10 @@ export function readTokens() {
     rule: get('rule'),
     ruleStrong: get('rule-strong'),
     surface: get('surface'),
+    aSoft: get('a-soft'),
+    bSoft: get('b-soft'),
+    serif: get('serif'),
+    mono: get('mono'),
     sans: get('sans'),
   };
 }
