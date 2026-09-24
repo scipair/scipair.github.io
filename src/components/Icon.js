@@ -39,6 +39,7 @@ const paths = {
       <path d="M12 5v15M3 4c4-1 6 0 9 2 3-2 5-3 9-2v14c-4-1-6 0-9 2-3-2-5-3-9-2Z" />
     </>
   ),
+  download: <path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14" />,
   system: (
     <>
       <rect x="3" y="4" width="18" height="12" rx="2" />

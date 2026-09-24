@@ -58,7 +58,8 @@ export default function AuthorSearch({ author, label, apiKey, onSelect }) {
         }
       }}
     >
-      <label className="side-tag" htmlFor={`search-${label}`}>
+      <span className="side-mark" aria-hidden="true" />
+      <label className="sr-only" htmlFor={`search-${label}`}>
         Author {label}
       </label>
       <div className="name-field">

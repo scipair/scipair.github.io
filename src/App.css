@@ -3,6 +3,7 @@
   --gutter: 40px;
   --max: 1280px;
   min-height: 100vh;
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
 }
@@ -65,6 +66,8 @@ b {
 
 /* ---------- top bar ---------- */
 .topbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -148,6 +151,50 @@ main {
   padding: 28px var(--gutter) 0;
 }
 
+/* ---------- hero: the pair, timeline and ledger ---------- */
+/* A full-bleed wash, blue from A's side and orange from B's, that also runs
+   up behind the top bar. */
+.hero {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 30px;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -100vh;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(90deg, var(--a-wash), transparent 38%, transparent 62%, var(--b-wash)),
+    linear-gradient(180deg, transparent 60%, var(--surface));
+  border-bottom: 1px solid var(--rule);
+}
+/* Faint graph-paper dots, fading out towards the timeline. */
+.hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -100vh;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  background-position: center top;
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100vh + 60px), transparent calc(100vh + 420px));
+  mask-image: linear-gradient(180deg, #000 calc(100vh + 60px), transparent calc(100vh + 420px));
+  pointer-events: none;
+}
+.settings {
+  position: relative;
+  z-index: 1;
+}
+
 /* ---------- the pair ---------- */
 .pair {
   display: grid;
@@ -164,30 +211,20 @@ main {
 .author-search {
   position: relative;
 }
-.side-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink-2);
-}
-.side-tag::before {
-  content: '';
-  width: 9px;
-  height: 9px;
+.side-mark {
+  display: block;
+  width: 28px;
+  height: 3px;
   border-radius: 2px;
   background: var(--a);
 }
-.side-b .side-tag {
-  flex-direction: row-reverse;
-}
-.side-b .side-tag::before {
+.side-b .side-mark {
+  margin-left: auto;
   background: var(--b);
 }
 .name-field {
   position: relative;
-  margin-top: 4px;
+  margin-top: 10px;
 }
 .name-field input {
   width: 100%;
@@ -481,8 +518,9 @@ main {
   color: var(--ink);
 }
 .timeline-readout small {
-  font-size: 11px;
-  opacity: 0.75;
+  font-family: var(--sans);
+  font-size: 12px;
+  opacity: 0.8;
 }
 .timeline-readout .muted {
   font-family: var(--sans);
@@ -525,8 +563,7 @@ main {
 .tl-side {
   position: absolute;
   left: 0;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1;
 }
@@ -596,7 +633,6 @@ main {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-top: 36px;
   border-bottom: 1px solid var(--rule);
   background: var(--bg);
   scroll-margin-top: 0;
@@ -775,21 +811,14 @@ main {
   letter-spacing: -0.2px;
 }
 .side-dot {
-  display: inline-grid;
-  place-items: center;
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: var(--a-tint);
-  color: var(--a);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  font-weight: 500;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--a);
 }
 .column-b .side-dot {
-  background: var(--b-tint);
-  color: var(--b);
+  background: var(--b);
 }
 .segments {
   display: flex;
@@ -1085,17 +1114,13 @@ main {
 }
 .network-head {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px 24px;
-}
-.network-head .chart-legend {
-  margin: 0;
 }
 .network-canvas {
   height: 540px;
-  margin-top: 16px;
+  margin-top: 4px;
   border: 1px solid var(--rule);
   border-radius: 8px;
   background: var(--surface);
@@ -1195,8 +1220,8 @@ main {
     gap: 8px;
     padding-top: 4px;
   }
-  .side-b .side-tag {
-    flex-direction: row;
+  .side-b .side-mark {
+    margin-left: 0;
   }
   .side-b .name-field input {
     text-align: left;
@@ -1337,4 +1362,36 @@ main {
   .theme-switch button {
     width: 26px;
   }
+}
+.table-actions {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 0 -9px;
+}
+
+/* ---------- figure downloads ---------- */
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.download > svg {
+  margin-right: 2px;
+}
+.download .quiet-button {
+  padding: 4px 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.timeline-head .download {
+  margin-left: auto;
+}
+.chart-block header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }

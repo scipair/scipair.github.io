@@ -4,6 +4,7 @@ const format = (number) => number.toLocaleString();
 
 export default function PaperColumn({
   label,
+  names,
   state,
   works,
   stats,
@@ -35,7 +36,8 @@ export default function PaperColumn({
       ),
     [works, filter, connectedOnly, query],
   );
-  const other = label === 'A' ? 'B' : 'A';
+  const other = names[1];
+  const otherSide = label === 'A' ? 'b' : 'a';
   const name = state.author?.display_name || `Author ${label}`;
   const filters = [
     ['all', 'All'],
@@ -51,9 +53,7 @@ export default function PaperColumn({
     >
       <header className="column-head">
         <h2>
-          <span className="side-dot" aria-hidden="true">
-            {label}
-          </span>
+          <span className="side-dot" aria-hidden="true" />
           {name}
         </h2>
         <div className="segments" aria-label={`Filter author ${label} papers`}>
@@ -142,12 +142,12 @@ export default function PaperColumn({
                         <span className="tag tag-both">with {other}</span>
                       )}
                       {work.citing && (
-                        <span className={`tag tag-${other.toLowerCase()}`}>
+                        <span className={`tag tag-${otherSide}`}>
                           cites {other}
                         </span>
                       )}
                       {work.cited && (
-                        <span className={`tag tag-${other.toLowerCase()}`}>
+                        <span className={`tag tag-${otherSide}`}>
                           cited by {other}
                         </span>
                       )}

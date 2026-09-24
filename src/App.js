@@ -7,6 +7,7 @@ import Timeline from './components/Timeline';
 import useAuthor from './hooks/useAuthor';
 import { compareWorks, sharedCollaborators } from './lib/compare';
 import { useColorScheme, useThemePreference } from './lib/theme';
+import { shortNames } from './lib/names';
 const Analytics = lazy(() => import('./components/Analytics'));
 const CollaborationNetwork = lazy(
   () => import('./components/CollaborationNetwork'),
@@ -40,7 +41,7 @@ function ThemeSwitch() {
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) =>
-        meta.setAttribute('content', scheme === 'dark' ? '#131416' : '#f8f7f4'),
+        meta.setAttribute('content', scheme === 'dark' ? '#131416' : '#fbfbfa'),
       );
   }, [scheme]);
   return (
@@ -159,8 +160,12 @@ export default function App() {
   );
   const loading = first.loading || second.loading;
   const incomplete = loading || first.error || second.error;
-  const names = [first, second].map(
-    (state, index) => state.author?.display_name || `Author ${'AB'[index]}`,
+  const names = useMemo(
+    () => shortNames([first.author, second.author]),
+    [first.author, second.author],
+  );
+  const fullNames = [first, second].map(
+    (state, index) => state.author?.display_name || names[index],
   );
   const setFilter = (index, value) =>
     setFilters((current) =>
@@ -189,8 +194,8 @@ export default function App() {
       value: comparison.stats[0].citing,
       text: (
         <>
-          papers by <em className="ink-a">A</em> cite{' '}
-          <em className="ink-b">B</em>
+          papers by <em className="ink-a">{names[0]}</em> cite{' '}
+          <em className="ink-b">{names[1]}</em>
         </>
       ),
       filters: ['citing', 'all'],
@@ -200,8 +205,8 @@ export default function App() {
       value: comparison.stats[1].citing,
       text: (
         <>
-          papers by <em className="ink-b">B</em> cite{' '}
-          <em className="ink-a">A</em>
+          papers by <em className="ink-b">{names[1]}</em> cite{' '}
+          <em className="ink-a">{names[0]}</em>
         </>
       ),
       filters: ['all', 'citing'],
@@ -284,51 +289,57 @@ export default function App() {
         </form>
       )}
       <main>
-        <section className="pair" aria-label="Choose authors">
-          <AuthorHead
-            side="A"
-            state={first}
-            works={comparison.works[0]}
-            apiKey={apiKey}
-          />
-          <div
-            className={`exchange ${incomplete ? 'provisional' : ''}`}
-            aria-label="How the two authors connect"
-          >
-            {flows.map((flow) => (
-              <button
-                key={flow.key}
-                className={`flow flow-${flow.key}`}
-                disabled={!flow.value}
-                onClick={() => focus(flow.filters)}
-                title={flow.value ? 'Show these papers' : undefined}
-              >
-                <span className="flow-value">{format(flow.value)}</span>
-                <span className="flow-line" aria-hidden="true" />
-                <span className="flow-text">{flow.text}</span>
-              </button>
-            ))}
-          </div>
-          <AuthorHead
-            side="B"
-            state={second}
-            works={comparison.works[1]}
-            apiKey={apiKey}
-          />
-        </section>
-        <Timeline works={comparison.works} names={names} />
-        <p className={`ledger ${incomplete ? 'provisional' : ''}`}>
-          <span>
-            <b>{format(comparison.unique)}</b> distinct papers
-          </span>
-          <span>
-            <b>{format(comparison.citations)}</b> references between them
-          </span>
-          <span>
-            <b>{format(shared.length)}</b> shared collaborators
-          </span>
-          {incomplete && <span className="muted">counts still loading</span>}
-        </p>
+        <div className="hero">
+          <section className="pair" aria-label="Choose authors">
+            <AuthorHead
+              side="A"
+              state={first}
+              works={comparison.works[0]}
+              apiKey={apiKey}
+            />
+            <div
+              className={`exchange ${incomplete ? 'provisional' : ''}`}
+              aria-label="How the two authors connect"
+            >
+              {flows.map((flow) => (
+                <button
+                  key={flow.key}
+                  className={`flow flow-${flow.key}`}
+                  disabled={!flow.value}
+                  onClick={() => focus(flow.filters)}
+                  title={flow.value ? 'Show these papers' : undefined}
+                >
+                  <span className="flow-value">{format(flow.value)}</span>
+                  <span className="flow-line" aria-hidden="true" />
+                  <span className="flow-text">{flow.text}</span>
+                </button>
+              ))}
+            </div>
+            <AuthorHead
+              side="B"
+              state={second}
+              works={comparison.works[1]}
+              apiKey={apiKey}
+            />
+          </section>
+          <Timeline
+          works={comparison.works}
+          names={names}
+          fullNames={fullNames}
+        />
+          <p className={`ledger ${incomplete ? 'provisional' : ''}`}>
+            <span>
+              <b>{format(comparison.unique)}</b> distinct papers
+            </span>
+            <span>
+              <b>{format(comparison.citations)}</b> references between them
+            </span>
+            <span>
+              <b>{format(shared.length)}</b> shared collaborators
+            </span>
+            {incomplete && <span className="muted">counts still loading</span>}
+          </p>
+        </div>
         <div className="viewbar" id="workspace">
           <nav className="tabs" aria-label="Explore comparison">
             {tabs.map(([id, title]) => (
@@ -401,6 +412,7 @@ export default function App() {
                 <PaperColumn
                   key={'AB'[index]}
                   label={'AB'[index]}
+                  names={index ? [names[1], names[0]] : names}
                   state={state}
                   works={comparison.works[index]}
                   stats={comparison.stats[index]}
@@ -424,6 +436,8 @@ export default function App() {
               <Analytics
                 works={comparison.works}
                 authors={[first.author, second.author]}
+                names={names}
+                fullNames={fullNames}
               />
             ) : (
               <CollaborationNetwork
@@ -431,6 +445,8 @@ export default function App() {
                 collaborators={[first.collaborators, second.collaborators]}
                 shared={shared}
                 coauthored={comparison.stats[0].coauthored}
+                names={names}
+                fullNames={fullNames}
               />
             )}
           </Suspense>
