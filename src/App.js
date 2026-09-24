@@ -6,6 +6,7 @@ import PaperColumn from './components/PaperColumn';
 import Timeline from './components/Timeline';
 import useAuthor from './hooks/useAuthor';
 import { compareWorks, sharedCollaborators } from './lib/compare';
+import { useColorScheme, useThemePreference } from './lib/theme';
 const Analytics = lazy(() => import('./components/Analytics'));
 const CollaborationNetwork = lazy(
   () => import('./components/CollaborationNetwork'),
@@ -16,6 +17,11 @@ const tabs = [
   ['analytics', 'Trends'],
   ['network', 'Network'],
 ];
+const themes = [
+  ['system', 'Match system', 'system'],
+  ['light', 'Light', 'sun'],
+  ['dark', 'Dark', 'moon'],
+];
 const shortId = (author) =>
   (author?.id || author?.short_id || '').split('/').pop();
 const format = (number) => number.toLocaleString();
@@ -25,6 +31,34 @@ function readKey() {
   } catch {
     return '';
   }
+}
+
+function ThemeSwitch() {
+  const [preference, setPreference] = useThemePreference();
+  const scheme = useColorScheme();
+  useEffect(() => {
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) =>
+        meta.setAttribute('content', scheme === 'dark' ? '#131416' : '#f8f7f4'),
+      );
+  }, [scheme]);
+  return (
+    <div className="theme-switch" role="radiogroup" aria-label="Appearance">
+      {themes.map(([value, label, icon]) => (
+        <button
+          key={value}
+          role="radio"
+          aria-checked={preference === value}
+          aria-label={label}
+          title={label}
+          onClick={() => setPreference(value)}
+        >
+          <Icon name={icon} width="15" height="15" />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function AuthorHead({ side, state, works, apiKey }) {
@@ -193,6 +227,7 @@ export default function App() {
           How two researchers’ work connects, from OpenAlex records
         </span>
         <nav className="topbar-actions">
+          <ThemeSwitch />
           <button
             className="quiet-button"
             aria-expanded={settings}
