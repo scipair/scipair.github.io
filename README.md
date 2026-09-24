@@ -30,7 +30,7 @@ npm start
 
 `npm test` runs the tests and `npm run build` makes a production build. Pushes to `main` deploy to GitHub Pages.
 
-Bug reports and pull requests are welcome in [Issues](https://github.com/scipair/scipair/issues).
+Bug reports and pull requests are welcome in [Issues](https://github.com/scipair/scipair.github.io/issues).
 
 ## Authors
 

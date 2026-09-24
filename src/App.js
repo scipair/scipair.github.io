@@ -202,7 +202,7 @@ export default function App() {
           </button>
           <a
             className="quiet-button"
-            href="https://github.com/scipair/scipair"
+            href="https://github.com/scipair/scipair.github.io"
             target="_blank"
             rel="noreferrer"
           >
