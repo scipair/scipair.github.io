@@ -1430,3 +1430,8 @@ main {
     row-gap: 6px;
   }
 }
+@media (max-width: 1100px) {
+  .topbar:has(.budget) .topbar-note {
+    display: none;
+  }
+}

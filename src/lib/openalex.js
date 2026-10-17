@@ -190,6 +190,15 @@ function createUrl(path, params, apiKey) {
 // it is shared by everyone on the same IP address.
 const usage = { value: null, listeners: new Set(), worksCost: null };
 
+// Development only: ?budget=low or ?budget=out previews the budget notices.
+function simulatedRemaining(remaining, limit) {
+  if (process.env.NODE_ENV !== 'development') return remaining;
+  const mode = new URLSearchParams(window.location.search).get('budget');
+  if (mode === 'out') return 0;
+  if (mode === 'low') return limit * 0.07;
+  return remaining;
+}
+
 function recordUsage(response, apiKey) {
   const header = (name) => response?.headers?.get?.(name);
   const remaining = header('x-ratelimit-remaining-usd');
@@ -197,7 +206,7 @@ function recordUsage(response, apiKey) {
   if (remaining == null || limit == null) return;
   const reset = Number(header('x-ratelimit-reset'));
   usage.value = {
-    remaining: Number(remaining),
+    remaining: simulatedRemaining(Number(remaining), Number(limit)),
     limit: Number(limit),
     resetAt: Number.isFinite(reset) ? Date.now() + reset * 1000 : null,
     keyed: Boolean(apiKey),
