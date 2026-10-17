@@ -65,7 +65,7 @@ test('getAuthor throws a clear not-found error', async () => {
   await expect(getAuthor('missing author')).rejects.toThrow('OpenAlex author not found for "missing author".');
 });
 
-test('getAuthorWorks pages with a cursor and reports normalized progressive results', async () => {
+test('getAuthorWorks pages with a cursor when an API key is set and reports normalized progressive results', async () => {
   fetch
     .mockResolvedValueOnce(response({
       meta: { count: 2, next_cursor: 'next' },
@@ -98,6 +98,7 @@ test('getAuthorWorks pages with a cursor and reports normalized progressive resu
   const progress = [];
 
   await expect(getAuthorWorks('authors/A123', {
+    apiKey: 'key',
     onProgress: ({ works, collaborators, loaded, total }) => progress.push({ works, collaborators, loaded, total }),
   })).resolves.toMatchObject({
     works: [{ id: 'https://openalex.org/W1' }, { id: 'https://openalex.org/W2' }],
@@ -107,9 +108,35 @@ test('getAuthorWorks pages with a cursor and reports normalized progressive resu
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(new URL(fetch.mock.calls[0][0]).searchParams.get('cursor')).toBe('*');
   expect(new URL(fetch.mock.calls[1][0]).searchParams.get('cursor')).toBe('next');
-  expect(new URL(fetch.mock.calls[0][0]).searchParams.get('per_page')).toBe('100');
+  expect(new URL(fetch.mock.calls[0][0]).searchParams.get('per_page')).toBe('200');
   expect(new URL(fetch.mock.calls[0][0]).searchParams.get('select')).toBe(
     'id,title,publication_year,referenced_works,primary_location,authorships',
+  );
+});
+
+test('without an API key, works are fetched with numbered pages', async () => {
+  const work = (id) => ({ id: `https://openalex.org/W${id}`, title: `Paper ${id}` });
+  fetch
+    .mockResolvedValueOnce(response({ meta: { count: 3 }, results: [work(1), work(2)] }))
+    .mockResolvedValueOnce(response({ meta: { count: 3 }, results: [work(3)] }));
+
+  await expect(getAuthorWorks('A123')).resolves.toMatchObject({
+    works: [{ id: 'https://openalex.org/W1' }, { id: 'https://openalex.org/W2' }, { id: 'https://openalex.org/W3' }],
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  const params = fetch.mock.calls.map(([url]) => new URL(url).searchParams);
+  expect(params.map((search) => search.get('page'))).toEqual(['1', '2']);
+  expect(params.every((search) => !search.has('cursor') && !search.has('api_key'))).toBe(true);
+});
+
+test('shows OpenAlex’s own reason when it refuses a request', async () => {
+  fetch.mockResolvedValue(response({
+    error: 'API key required for cursor paging',
+    message: 'Paging past the first page with cursor= needs a free API key.',
+  }, 401));
+
+  await expect(getAuthorWorks('A123')).rejects.toThrow(
+    'OpenAlex refused the request: Paging past the first page with cursor= needs a free API key.',
   );
 });
 
