@@ -1,4 +1,11 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import './App.css';
 import Icon from './components/Icon';
 import AuthorSearch from './components/AuthorSearch';
@@ -8,6 +15,12 @@ import useAuthor from './hooks/useAuthor';
 import { compareWorks, sharedCollaborators } from './lib/compare';
 import { useColorScheme, useThemePreference } from './lib/theme';
 import { shortNames } from './lib/names';
+import {
+  comparisonsLeft,
+  formatWait,
+  getUsage,
+  subscribeUsage,
+} from './lib/openalex';
 const Analytics = lazy(() => import('./components/Analytics'));
 const CollaborationNetwork = lazy(
   () => import('./components/CollaborationNetwork'),
@@ -62,6 +75,29 @@ function ThemeSwitch() {
   );
 }
 
+// Without a key, everyone on the same network shares OpenAlex's daily budget.
+// Say something only when it's running low.
+function budgetNotice(usage, apiKey) {
+  if (apiKey || !usage || usage.remaining / usage.limit > 0.25) return '';
+  if (usage.remaining <= 0)
+    return usage.resetAt
+      ? `Free OpenAlex budget used up · resets in ${formatWait(usage.resetAt - Date.now())}`
+      : 'Free OpenAlex budget used up for today';
+  const left = comparisonsLeft(usage.remaining);
+  return `About ${left} comparison${left === 1 ? '' : 's'} left today`;
+}
+
+function budgetDetail(usage) {
+  if (!usage) return '';
+  const share = Math.round((usage.remaining / usage.limit) * 100);
+  const reset = usage.resetAt
+    ? `, resetting in ${formatWait(usage.resetAt - Date.now())}`
+    : '';
+  return usage.keyed
+    ? `Your key has ${share}% of today’s budget left${reset}.`
+    : `Without a key, everyone on your network shares OpenAlex’s free daily budget: ${share}% left${reset}. A key gives you your own.`;
+}
+
 function AuthorHead({ side, state, works, apiKey }) {
   const years = works.map((work) => work.publication_year).filter(Boolean);
   const id = shortId(state.author);
@@ -113,6 +149,8 @@ export default function App() {
   const [connectedOnly, setConnectedOnly] = useState(false);
   const [filters, setFilters] = useState(['all', 'all']);
   const [shareStatus, setShareStatus] = useState('');
+  const usage = useSyncExternalStore(subscribeUsage, getUsage);
+  const notice = budgetNotice(usage, apiKey);
   const first = useAuthor(apiKey);
   const second = useAuthor(apiKey);
   const loadFirst = first.load;
@@ -232,6 +270,16 @@ export default function App() {
           How two researchers’ work connects, from OpenAlex records
         </span>
         <nav className="topbar-actions">
+          {notice && (
+            <button
+              className="budget"
+              aria-expanded={settings}
+              onClick={() => setSettings(true)}
+            >
+              <span className="dot dot-warn" aria-hidden="true" />
+              {notice}
+            </button>
+          )}
           <ThemeSwitch />
           <button
             className="quiet-button"
@@ -269,7 +317,7 @@ export default function App() {
             id="api-key"
             type="password"
             autoComplete="off"
-            placeholder="Optional — raises the daily request limit"
+            placeholder="Optional — gives you your own daily budget"
             value={keyDraft}
             onChange={(event) => setKeyDraft(event.target.value)}
           />
@@ -277,7 +325,7 @@ export default function App() {
             Save
           </button>
           <p>
-            Kept for this browser session only.{' '}
+            {budgetDetail(usage)} Kept for this browser session only.{' '}
             <a
               href="https://openalex.org/settings/api"
               target="_blank"
@@ -323,10 +371,10 @@ export default function App() {
             />
           </section>
           <Timeline
-          works={comparison.works}
-          names={names}
-          fullNames={fullNames}
-        />
+            works={comparison.works}
+            names={names}
+            fullNames={fullNames}
+          />
           <p className={`ledger ${incomplete ? 'provisional' : ''}`}>
             <span>
               <b>{format(comparison.unique)}</b> distinct papers

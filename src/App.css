@@ -1395,3 +1395,43 @@ main {
   align-items: flex-start;
   gap: 16px;
 }
+
+/* ---------- OpenAlex budget notice ---------- */
+.budget {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.budget:hover {
+  border-color: var(--warn);
+  color: var(--ink);
+}
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .budget {
+    order: 5;
+    margin: 0;
+  }
+  .topbar-actions {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 6px;
+  }
+}
+@media (max-width: 1100px) {
+  .topbar:has(.budget) .topbar-note {
+    display: none;
+  }
+}

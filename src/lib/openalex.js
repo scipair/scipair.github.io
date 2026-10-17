@@ -186,6 +186,67 @@ function createUrl(path, params, apiKey) {
   return url;
 }
 
+// OpenAlex reports a daily budget (in USD) on every response. Without a key
+// it is shared by everyone on the same IP address.
+const usage = { value: null, listeners: new Set(), worksCost: null };
+
+// Development only: ?budget=low or ?budget=out previews the budget notices.
+function simulatedRemaining(remaining, limit) {
+  if (process.env.NODE_ENV !== 'development') return remaining;
+  const mode = new URLSearchParams(window.location.search).get('budget');
+  if (mode === 'out') return 0;
+  if (mode === 'low') return limit * 0.07;
+  return remaining;
+}
+
+function recordUsage(response, apiKey) {
+  const header = (name) => response?.headers?.get?.(name);
+  const remaining = header('x-ratelimit-remaining-usd');
+  const limit = header('x-ratelimit-limit-usd');
+  if (remaining == null || limit == null) return;
+  const reset = Number(header('x-ratelimit-reset'));
+  usage.value = {
+    remaining: simulatedRemaining(Number(remaining), Number(limit)),
+    limit: Number(limit),
+    resetAt: Number.isFinite(reset) ? Date.now() + reset * 1000 : null,
+    keyed: Boolean(apiKey),
+  };
+  usage.listeners.forEach((listener) => listener());
+}
+
+export function getUsage() {
+  return usage.value;
+}
+
+export function subscribeUsage(listener) {
+  usage.listeners.add(listener);
+  return () => usage.listeners.delete(listener);
+}
+
+// Rough comparisons left, from what loading an author's works has cost so far.
+export function comparisonsLeft(remaining) {
+  const perAuthor = usage.worksCost ?? 0.0003;
+  return Math.max(0, Math.floor(remaining / (perAuthor * 2)));
+}
+
+export function formatWait(ms) {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+function budgetError(apiKey) {
+  const resetAt = usage.value?.resetAt;
+  const when = resetAt ? ` It resets in ${formatWait(resetAt - Date.now())}.` : '';
+  const error = new Error(apiKey
+    ? `Your OpenAlex API key has used today’s budget.${when}`
+    : `Today’s free OpenAlex budget for your network is used up.${when} Add a free API key to keep going.`);
+  error.status = 429;
+  return error;
+}
+
 function retryAfterMs(response) {
   const value = response?.headers?.get?.('retry-after');
   if (!value) return null;
@@ -218,7 +279,7 @@ function wait(ms, signal) {
   });
 }
 
-async function fetchJson(path, params, { signal, apiKey } = {}) {
+async function fetchJson(path, params, { signal, apiKey, onCost } = {}) {
   let lastStatus;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -232,13 +293,20 @@ async function fetchJson(path, params, { signal, apiKey } = {}) {
     try {
       response = await fetch(createUrl(path, params, apiKey).toString(), { signal: controller.signal });
       lastStatus = response.status;
+      recordUsage(response, apiKey);
       throwIfAborted(signal);
 
       if (response.ok) {
+        const cost = Number(response.headers?.get?.('x-ratelimit-cost-usd'));
+        if (Number.isFinite(cost)) onCost?.(cost);
         const payload = await response.json();
         throwIfAborted(signal);
         return payload;
       }
+      if (!response.ok && usage.value && usage.value.remaining <= 0) {
+        throw budgetError(apiKey);
+      }
+
       if (response.status === 401 || response.status === 403) {
         let message = '';
         try {
@@ -332,6 +400,8 @@ async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
   let page = 1;
   let more = true;
   let total = 0;
+  let cost = 0;
+  const addCost = (value) => { cost += value; };
   const works = [];
   const collaborators = new Map();
   const seenWorks = new Set();
@@ -342,7 +412,7 @@ async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
       per_page: WORKS_PER_PAGE,
       ...(useCursor ? { cursor } : { page }),
       select: 'id,title,publication_year,referenced_works,primary_location,authorships',
-    }, { signal, apiKey });
+    }, { signal, apiKey, onCost: addCost });
     const results = Array.isArray(payload?.results) ? payload.results : [];
     total = Number(payload?.meta?.count) || total;
 
@@ -368,6 +438,10 @@ async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
       page += 1;
     }
   } while (more && (total === 0 || works.length < total));
+
+  if (cost > 0) {
+    usage.worksCost = usage.worksCost == null ? cost : usage.worksCost * 0.6 + cost * 0.4;
+  }
 
   if (!useCursor && works.length < total && total > MAX_PAGED_RESULTS) {
     const error = new Error(
@@ -466,6 +540,8 @@ export function getAuthorWorks(authorId, { signal, apiKey, onProgress } = {}) {
 }
 
 export function clearOpenAlexCache() {
+  usage.value = null;
+  usage.worksCost = null;
   memoryCache.clear();
   try {
     Object.keys(sessionStorage)
