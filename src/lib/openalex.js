@@ -6,6 +6,10 @@ const MAX_SESSION_CACHE_ENTRIES = 24;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 250;
+const WORKS_PER_PAGE = 200;
+// OpenAlex serves numbered pages without a key, but only up to 10,000 results;
+// cursor paging has no limit but requires an API key.
+const MAX_PAGED_RESULTS = 10_000;
 const MAX_RETRY_AFTER_MS = 2_000;
 
 const memoryCache = new Map();
@@ -236,7 +240,18 @@ async function fetchJson(path, params, { signal, apiKey } = {}) {
         return payload;
       }
       if (response.status === 401 || response.status === 403) {
-        throw new Error('OpenAlex authentication failed. Check the optional API key.');
+        let message = '';
+        try {
+          const body = await response.json();
+          message = body?.message || body?.error || '';
+        } catch {
+          // Fall back to a generic message below.
+        }
+        const error = new Error(message
+          ? `OpenAlex refused the request: ${message}`
+          : 'OpenAlex refused the request. Check the API key under “API key”.');
+        error.status = response.status;
+        throw error;
       }
 
       if (response.status === 429) {
@@ -312,7 +327,10 @@ export async function getAuthor(queryOrId, { signal, apiKey } = {}) {
 }
 
 async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
+  const useCursor = Boolean(apiKey);
   let cursor = '*';
+  let page = 1;
+  let more = true;
   let total = 0;
   const works = [];
   const collaborators = new Map();
@@ -321,14 +339,14 @@ async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
   do {
     const payload = await fetchJson('/works', {
       filter: `authorships.author.id:${authorUrl(authorId)}`,
-      per_page: 100,
-      cursor,
+      per_page: WORKS_PER_PAGE,
+      ...(useCursor ? { cursor } : { page }),
       select: 'id,title,publication_year,referenced_works,primary_location,authorships',
     }, { signal, apiKey });
-    const page = Array.isArray(payload?.results) ? payload.results : [];
+    const results = Array.isArray(payload?.results) ? payload.results : [];
     total = Number(payload?.meta?.count) || total;
 
-    page.forEach((rawWork) => {
+    results.forEach((rawWork) => {
       if (!seenWorks.has(rawWork?.id)) {
         const work = normaliseWork(rawWork);
         if (work) {
@@ -341,9 +359,24 @@ async function fetchAuthorWorks(authorId, { signal, apiKey, emitProgress }) {
 
     const result = { works: [...works], collaborators: Array.from(collaborators.values()) };
     emitProgress({ ...result, loaded: works.length, total });
-    cursor = payload?.meta?.next_cursor || null;
     throwIfAborted(signal);
-  } while (cursor && (total === 0 || works.length < total));
+    if (useCursor) {
+      cursor = payload?.meta?.next_cursor || null;
+      more = Boolean(cursor);
+    } else {
+      more = results.length > 0 && page * WORKS_PER_PAGE < MAX_PAGED_RESULTS;
+      page += 1;
+    }
+  } while (more && (total === 0 || works.length < total));
+
+  if (!useCursor && works.length < total && total > MAX_PAGED_RESULTS) {
+    const error = new Error(
+      `OpenAlex returns at most ${MAX_PAGED_RESULTS.toLocaleString()} works without an API key. `
+      + `Add a free key under “API key” to load all ${total.toLocaleString()}.`,
+    );
+    error.status = 401;
+    throw error;
+  }
 
   return { works, collaborators: Array.from(collaborators.values()) };
 }
