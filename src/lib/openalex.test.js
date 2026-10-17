@@ -1,8 +1,12 @@
 import {
   clearOpenAlexCache,
+  comparisonsLeft,
+  formatWait,
   getAuthor,
   getAuthorWorks,
+  getUsage,
   searchAuthors,
+  subscribeUsage,
 } from './openalex';
 
 const response = (body, status = 200, headers = {}) => ({
@@ -138,6 +142,43 @@ test('shows OpenAlex’s own reason when it refuses a request', async () => {
   await expect(getAuthorWorks('A123')).rejects.toThrow(
     'OpenAlex refused the request: Paging past the first page with cursor= needs a free API key.',
   );
+});
+
+test('tracks the OpenAlex daily budget from response headers', async () => {
+  const budget = (remaining, cost) => ({
+    'x-ratelimit-remaining-usd': String(remaining),
+    'x-ratelimit-limit-usd': '0.1',
+    'x-ratelimit-reset': '3600',
+    'x-ratelimit-cost-usd': String(cost),
+  });
+  const listener = jest.fn();
+  const unsubscribe = subscribeUsage(listener);
+  fetch
+    .mockResolvedValueOnce(response({ meta: { count: 2 }, results: [{ id: 'https://openalex.org/W1', title: 'One' }] }, 200, budget(0.02, 0.001)))
+    .mockResolvedValueOnce(response({ meta: { count: 2 }, results: [{ id: 'https://openalex.org/W2', title: 'Two' }] }, 200, budget(0.019, 0.001)));
+
+  await getAuthorWorks('A123');
+  unsubscribe();
+  expect(listener).toHaveBeenCalledTimes(2);
+  expect(getUsage()).toMatchObject({ remaining: 0.019, limit: 0.1, keyed: false });
+  expect(getUsage().resetAt - Date.now()).toBeGreaterThan(3_500_000);
+  // Loading that author cost $0.002, so a comparison of two costs $0.004.
+  expect(comparisonsLeft(0.019)).toBe(4);
+  expect(formatWait(3_600_000)).toBe('1 h');
+  expect(formatWait(200 * 60_000)).toBe('3 h 20 min');
+});
+
+test('explains an exhausted budget instead of retrying', async () => {
+  fetch.mockResolvedValue(response({ error: 'Budget exceeded' }, 429, {
+    'x-ratelimit-remaining-usd': '0',
+    'x-ratelimit-limit-usd': '0.1',
+    'x-ratelimit-reset': '7200',
+  }));
+
+  await expect(getAuthorWorks('A123')).rejects.toThrow(
+    /free OpenAlex budget for your network is used up\. It resets in 2 h\. Add a free API key/,
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 test('completed works are served from memory and session storage cache', async () => {
